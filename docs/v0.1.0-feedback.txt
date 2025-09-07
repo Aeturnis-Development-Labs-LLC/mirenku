@@ -1,0 +1,79 @@
+What’s solid
+
+Clear app entry with logging + error dialog fallback (good first-run UX).
+
+Sensible config defaults (auto-save, backups, window geometry, sort state) and platform-aware data dir.
+
+Rotating logs + daily file naming + cleanup helper, which is perfect for end-users.
+
+Toast/notification system with fade animations and a global exception hook to surface errors to users.
+
+Persistence manager covers JSON/CSV import/export, periodic config saves, hourly DB backups w/ retention, and vacuum.
+
+Public docs read clean and align with a Phase-1 local MVP.
+
+Gaps & inconsistencies (fix these first)
+
+Package layout mismatch (imports will break).
+main.py imports ui.main_window, utils.config, utils.logging_config, and models.database, but the uploaded files live top-level (e.g., config.py, logging_config.py). Either move files under src/{ui,utils,models,services} as your README declares, or change imports to match current layout.
+
+Missing modules in this snapshot.
+Database and AnimeService are referenced but not included here (models.database, services.anime_service). You’ll get ImportErrors at runtime and in PersistenceManager. Ensure those files ship with v0.1.0.
+
+Version mismatch.
+Docs say 0.1.0, but __init__.py reports 0.1.0-dev. Align these so About dialogs, crash logs, and support tickets reference the same version. (Recommend: source version from one place—env var during build or a single version.py.)
+
+Config vs logging directories diverge.
+Config/data uses ~/.config/animetracker (Linux/Mac) or %LOCALAPPDATA%\AnimeTracker (Windows), while logging defaults to ~/.AnimeTracker/logs. Unify these (prefer Config.get_data_directory()/logs).
+
+Stray import + minor hygiene.
+config.py has an extra import sys note at the bottom—already imported above. Remove it; keep imports at the top.
+
+Thread safety & lifecycle.
+Auto-save thread writes the config every 30s and runs hourly backups. Ensure app shutdown always calls PersistenceManager.stop_auto_save_thread() (e.g., in MainWindow.on_close) to avoid orphaned threads. Consider a small lock around save_settings() if the UI also writes settings.
+
+CSV/JSON schema coupling.
+CSV export assumes date_added / date_updated attributes on your Anime entities; make sure the model sets these (and serializes consistently). Otherwise CSV export raises on missing attributes.
+
+Notifications import nits.
+ttk is imported but unused; also consider reducing public surface by exporting only NotificationManager, ErrorHandler, and setup_global_exception_handler.
+
+Quick wins (1–2 hour sweep)
+
+Single source of truth for version and wire it to README badge/build script. Also write version to logs on startup.
+
+Standardize paths: put logs under Config.get_data_directory()/logs and backups under .../backups. Update setup_logging() to accept the config path and default to that.
+
+Tighten JSON import: validate structure, normalize status strings, and collect row-level errors (you already return (imported, failed, errors)—great; just add per-row context like “Row 14: invalid score”).
+
+CSV import robustness: guard int() casts with better messages; support blank/“unknown” total_episodes gracefully (you already try/except—good—just surface which row failed).
+
+Log context on backups: include DB size before/after vacuum() to prove benefit.
+
+Medium wins (next minor release)
+
+Graceful first-run: If DB missing or schema is old, run Database.initialize() + PRAGMA foreign_keys=ON + migrations and show a friendly “Welcome” toast. (Hook into your notification system.)
+
+Centralized error UX: You already map exceptions to messages—add a lightweight “View error log” dialog that pulls from ErrorHandler.get_error_log() for support.
+
+Config schema versioning: Add "config_version" to settings to manage future changes (theme keys, new preferences).
+
+Export manifest: Include app version, OS, and timestamp in CSV (first commented line) so imports can warn on schema drift. You already do this in JSON; mirror it.
+
+Docs alignment
+
+README’s declared structure (src/…) is great—make it true in the repo or update the doc to match reality. Also, the “80 tests passing” claim is compelling; consider linking to CI badges or a coverage report for credibility.
+
+Suggested “done-definition” checklist for v0.1.1
+
+ Imports resolve with the advertised package layout (or docs updated).
+
+ Version string unified (0.1.1) across code, README badge, CHANGELOG.
+
+ Logs + backups live under the data dir.
+
+ Auto-save thread always shuts down on app exit.
+
+ JSON/CSV import/export round-trips a sample dataset without warnings.
+
+ Add a tiny “About / Diagnostics” dialog showing version, data dir, DB path, and log path.

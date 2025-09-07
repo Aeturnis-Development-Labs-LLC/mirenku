@@ -21,12 +21,16 @@ from models.database import Database
 
 def main():
     try:
-        # Set up logging
-        log_dir = setup_logging(log_level="INFO")
+        # Initialize configuration first
+        config = Config()
+        
+        # Set up logging with config
+        log_dir = setup_logging(log_level="INFO", config=config)
         clean_old_logs(log_dir, days_to_keep=7)
         
-        # Initialize configuration
-        config = Config()
+        # Log version
+        from __init__ import __version__
+        logging.info(f"Anime Tracker v{__version__} starting...")
         
         # Initialize database
         db = Database(config.get_db_path())

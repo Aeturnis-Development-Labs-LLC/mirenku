@@ -1,15 +1,15 @@
 # Anime Tracker
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen.svg)](tests/)
 
-A simple, offline-first desktop application for tracking your anime viewing progress.
+A powerful desktop application for tracking your anime viewing progress with MyAnimeList integration and synchronization.
 
 ## 🎯 Features
 
-### ✅ Completed (v0.1.0)
+### ✅ Core Features
 - **Full CRUD Operations** - Add, edit, delete, and manage your anime list
 - **Episode Tracking** - Track watched episodes with quick increment/decrement buttons
 - **Status Management** - Organize with 5 status types (Watching, Completed, On Hold, Dropped, Plan to Watch)
@@ -19,12 +19,19 @@ A simple, offline-first desktop application for tracking your anime viewing prog
 - **Auto-Save** - Never lose your progress with automatic saving
 - **Keyboard Shortcuts** - Quick access to common actions
 - **Statistics** - View your watching statistics at a glance
-- **Data Persistence** - SQLite database for reliable local storage
-- **Error Handling** - User-friendly notifications and error messages
 
-### 🚀 Planned (v0.2.0+)
-- 🔄 MyAnimeList (MAL) integration
-- 🔄 Two-way synchronization with MAL
+### 🌐 MyAnimeList Integration (v0.3.0)
+- **MAL Search** - Search and import anime directly from MyAnimeList
+- **OAuth2 Authentication** - Secure connection to your MAL account
+- **Bidirectional Sync** - Push local changes to MAL and pull updates
+- **Import MAL List** - Import your entire MAL anime list
+- **Metadata Enrichment** - Auto-populate anime details from MAL
+- **Cover Art** - Download and cache anime cover images
+- **Offline Queue** - Queue changes when offline, sync when connected
+
+### 🚀 Planned Features
+- 🔄 Custom protocol handler for improved OAuth2 (v0.4.0)
+- 🔄 Browser extension for streaming service integration
 - 🔄 Advanced statistics and analytics
 - 🔄 Dark/Light theme support
 - 🔄 Cloud backup options
@@ -52,6 +59,28 @@ python src/main.py
 ### Option 2: Windows Executable (Coming Soon)
 
 Download the latest `.exe` file from the [Releases](https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/releases) page.
+
+## 🔗 MyAnimeList Setup
+
+### Connecting to MAL (Beta - v0.3.0)
+
+1. **Register your MAL app** (one-time setup for developers):
+   - Go to https://myanimelist.net/apiconfig
+   - Create a new application
+   - Set redirect URL to: `http://localhost:8888/callback`
+   - Note your Client ID
+
+2. **Connect in the app**:
+   - Click the "🔗 Connect MAL" button in the toolbar
+   - Your browser will open to MyAnimeList
+   - Log in and authorize the application
+   - You'll be redirected back to the app
+
+3. **Sync your anime**:
+   - Use "Tools → Sync with MAL" to sync your lists
+   - Choose Push (upload), Pull (download), or Full sync
+
+**Note**: OAuth2 authentication is currently in beta. Some users may experience issues with the localhost callback. This will be improved in v0.4.0 with a custom protocol handler.
 
 ## 🎮 Usage
 

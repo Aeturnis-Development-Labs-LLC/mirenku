@@ -14,7 +14,7 @@ class Config:
     
     def __init__(self):
         self.app_name = "AnimeTracker"
-        self.version = "0.1.0-dev"
+        self.version = "0.1.1"
         
         # Determine if running as frozen executable or script
         if getattr(sys, 'frozen', False):
@@ -107,6 +107,3 @@ class Config:
         backup_dir = self.data_dir / "backups"
         backup_dir.mkdir(exist_ok=True)
         return backup_dir
-
-
-import sys  # Add this import at the top of the file

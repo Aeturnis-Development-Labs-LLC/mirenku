@@ -229,6 +229,12 @@ class Anime:
             except ValueError:
                 data['aired_to'] = None
         
+        # Remove fields that are not part of the Anime model
+        # These are database-only fields added in migrations
+        fields_to_remove = ['sync_status', 'last_mal_sync']
+        for field in fields_to_remove:
+            data.pop(field, None)
+        
         return cls(**data)
     
     def validate(self) -> List[str]:

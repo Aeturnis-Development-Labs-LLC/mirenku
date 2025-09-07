@@ -7,21 +7,30 @@ from datetime import datetime
 import sys
 
 
-def setup_logging(log_dir: Path = None, log_level: str = "INFO"):
+def setup_logging(log_dir: Path = None, log_level: str = "INFO", config=None):
     """Set up application logging
     
     Args:
         log_dir: Directory for log files (None for default)
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        config: Config instance to get data directory from
     """
     # Create log directory if needed
     if log_dir is None:
-        if getattr(sys, 'frozen', False):
+        if config:
+            # Use config's data directory
+            log_dir = config.get_data_directory() / "logs"
+        elif getattr(sys, 'frozen', False):
             # Running as executable
             log_dir = Path(sys.executable).parent / "logs"
         else:
-            # Running as script
-            log_dir = Path.home() / ".AnimeTracker" / "logs"
+            # Running as script - use same pattern as config
+            import os
+            if os.name == 'nt':  # Windows
+                app_data = os.environ.get('LOCALAPPDATA', Path.home() / 'AppData' / 'Local')
+                log_dir = Path(app_data) / "AnimeTracker" / "logs"
+            else:  # Unix-like
+                log_dir = Path.home() / ".config" / "animetracker" / "logs"
     
     log_dir.mkdir(parents=True, exist_ok=True)
     
@@ -85,10 +94,14 @@ def get_log_files(log_dir: Path = None) -> list:
         list: List of log file paths
     """
     if log_dir is None:
+        import os
         if getattr(sys, 'frozen', False):
             log_dir = Path(sys.executable).parent / "logs"
-        else:
-            log_dir = Path.home() / ".AnimeTracker" / "logs"
+        elif os.name == 'nt':  # Windows
+            app_data = os.environ.get('LOCALAPPDATA', Path.home() / 'AppData' / 'Local')
+            log_dir = Path(app_data) / "AnimeTracker" / "logs"
+        else:  # Unix-like
+            log_dir = Path.home() / ".config" / "animetracker" / "logs"
     
     if not log_dir.exists():
         return []

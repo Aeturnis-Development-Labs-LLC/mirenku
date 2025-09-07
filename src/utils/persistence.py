@@ -117,19 +117,59 @@ class PersistenceManager:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
-            # Handle both formats (with/without metadata)
-            if isinstance(data, dict) and "anime" in data:
-                anime_list = data["anime"]
+            # Validate JSON structure
+            if isinstance(data, dict):
+                if "anime" in data:
+                    anime_list = data["anime"]
+                    if not isinstance(anime_list, list):
+                        return 0, 0, ["Invalid JSON: 'anime' field must be a list"]
+                else:
+                    return 0, 0, ["Invalid JSON: Missing 'anime' field in object"]
             elif isinstance(data, list):
                 anime_list = data
             else:
-                return 0, 0, ["Invalid JSON format"]
+                return 0, 0, ["Invalid JSON: Must be an array or object with 'anime' field"]
             
-            return self.service.import_anime_list(anime_list)
+            # Validate each anime entry
+            errors = []
+            valid_anime = []
+            for idx, anime in enumerate(anime_list, start=1):
+                if not isinstance(anime, dict):
+                    errors.append(f"Entry {idx}: Must be an object")
+                    continue
+                if not anime.get('title'):
+                    errors.append(f"Entry {idx}: Missing required 'title' field")
+                    continue
+                
+                # Validate score if present
+                if 'score' in anime and anime['score'] is not None:
+                    try:
+                        score = int(anime['score'])
+                        if score < 0 or score > 10:
+                            errors.append(f"Entry {idx}: Score must be 0-10, got {score}")
+                    except (ValueError, TypeError):
+                        errors.append(f"Entry {idx}: Invalid score value")
+                
+                # Normalize status
+                if 'status' in anime:
+                    status = anime.get('status', 'Plan to Watch')
+                    valid_statuses = ['Watching', 'Completed', 'On Hold', 'Dropped', 'Plan to Watch']
+                    if status not in valid_statuses:
+                        errors.append(f"Entry {idx}: Invalid status '{status}'")
+                
+                valid_anime.append(anime)
+            
+            # Import valid entries
+            imported, failed, import_errors = self.service.import_anime_list(valid_anime)
+            errors.extend(import_errors)
+            
+            return imported, failed, errors
             
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON file: {e}")
-            return 0, 0, [f"Invalid JSON: {str(e)}"]
+            return 0, 0, [f"Invalid JSON at line {e.lineno}: {e.msg}"]
+        except FileNotFoundError:
+            return 0, 0, [f"File not found: {file_path}"]
         except Exception as e:
             logger.error(f"Import from JSON failed: {e}")
             return 0, 0, [f"Import error: {str(e)}"]
@@ -184,34 +224,59 @@ class PersistenceManager:
         """
         try:
             anime_list = []
+            errors = []
             
             with open(file_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 
-                for row in reader:
-                    anime_data = {
-                        'title': row.get('title', '').strip(),
-                        'status': row.get('status', 'Plan to Watch'),
-                        'episodes_watched': int(row.get('episodes_watched', 0) or 0),
-                        'notes': row.get('notes', '').strip() or None
-                    }
-                    
-                    # Optional fields
-                    if row.get('total_episodes'):
-                        try:
-                            anime_data['total_episodes'] = int(row['total_episodes'])
-                        except ValueError:
-                            pass
-                    
-                    if row.get('score'):
-                        try:
-                            anime_data['score'] = int(row['score'])
-                        except ValueError:
-                            pass
-                    
-                    anime_list.append(anime_data)
+                for row_num, row in enumerate(reader, start=2):  # Start at 2 (header is row 1)
+                    try:
+                        title = row.get('title', '').strip()
+                        if not title:
+                            errors.append(f"Row {row_num}: Missing title")
+                            continue
+                        
+                        anime_data = {
+                            'title': title,
+                            'status': row.get('status', 'Plan to Watch'),
+                            'episodes_watched': 0,
+                            'notes': row.get('notes', '').strip() or None
+                        }
+                        
+                        # Parse episodes_watched
+                        if row.get('episodes_watched'):
+                            try:
+                                anime_data['episodes_watched'] = int(row['episodes_watched'])
+                            except ValueError:
+                                errors.append(f"Row {row_num}: Invalid episodes_watched '{row['episodes_watched']}'")
+                        
+                        # Optional fields
+                        if row.get('total_episodes'):
+                            try:
+                                anime_data['total_episodes'] = int(row['total_episodes'])
+                            except ValueError:
+                                # Allow blank/unknown total_episodes
+                                pass
+                        
+                        if row.get('score'):
+                            try:
+                                score = int(row['score'])
+                                if 0 <= score <= 10:
+                                    anime_data['score'] = score
+                                else:
+                                    errors.append(f"Row {row_num}: Score must be 0-10, got {score}")
+                            except ValueError:
+                                errors.append(f"Row {row_num}: Invalid score '{row['score']}'")
+                        
+                        anime_list.append(anime_data)
+                    except Exception as e:
+                        errors.append(f"Row {row_num}: {str(e)}")
             
-            return self.service.import_anime_list(anime_list)
+            # Import valid entries
+            imported, failed, import_errors = self.service.import_anime_list(anime_list)
+            errors.extend(import_errors)
+            
+            return imported, failed, errors
             
         except Exception as e:
             logger.error(f"Import from CSV failed: {e}")

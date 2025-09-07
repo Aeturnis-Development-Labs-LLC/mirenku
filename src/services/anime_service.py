@@ -48,7 +48,9 @@ class AnimeService:
             if self.repository.exists(title):
                 return False, f"Anime '{title}' already exists", None
             
-            # Create anime instance
+            # Create anime instance with timestamps
+            from utils.timezone import get_current_datetime
+            now = get_current_datetime()
             anime = Anime(
                 title=title,
                 status=status,
@@ -56,6 +58,8 @@ class AnimeService:
                 total_episodes=total_episodes,
                 score=score,
                 notes=notes,
+                date_added=now,
+                date_updated=now,
                 **kwargs
             )
             
@@ -95,6 +99,10 @@ class AnimeService:
             for field, value in updates.items():
                 if hasattr(anime, field):
                     setattr(anime, field, value)
+            
+            # Update timestamp
+            from utils.timezone import get_current_datetime
+            anime.date_updated = get_current_datetime()
             
             # Validate
             errors = anime.validate()

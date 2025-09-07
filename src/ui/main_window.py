@@ -38,6 +38,37 @@ class MainWindow:
         self.config = Config()
         self.persistence = PersistenceManager(self.config, database)
         
+        # Set up MAL service
+        from services.mal_service import MALService
+        cache_dir = self.config.get_data_directory() / "mal_cache"
+        self.mal_service = MALService(cache_dir)
+        
+        # Set up image service
+        from services.image_service import ImageService
+        image_cache_dir = self.config.get_data_directory() / "image_cache"
+        self.image_service = ImageService(image_cache_dir)
+        
+        # Set up MAL OAuth2 authentication (Phase 3)
+        from ui.mal_auth_dialog import MALAuthManager
+        self.mal_auth_manager = MALAuthManager(
+            self.config.get_data_directory()
+            # Client ID is embedded in the application
+        )
+        
+        # Set up MAL API v2 service if authenticated
+        self.mal_api_v2_service = None
+        if self.mal_auth_manager.is_authenticated():
+            from services.mal_api_v2_service import MALAPIv2Service
+            self.mal_api_v2_service = MALAPIv2Service(self.mal_auth_manager.oauth_client)
+        
+        # Set up sync service (Phase 3 functionality)
+        from services.sync_service import SyncService
+        self.sync_service = SyncService(
+            database, 
+            self.mal_api_v2_service,
+            self.mal_auth_manager.oauth_client if hasattr(self.mal_auth_manager, 'oauth_client') else None
+        )
+        
         # Set up notification system
         self.notifications = NotificationManager(root)
         self.error_handler = ErrorHandler(self.notifications)
@@ -47,7 +78,11 @@ class MainWindow:
         window_state = self.persistence.load_window_state()
         
         # Window configuration
-        self.root.title("Anime Tracker v0.1.0")
+        try:
+            from __init__ import __version__
+            self.root.title(f"Anime Tracker v{__version__}")
+        except ImportError:
+            self.root.title("Anime Tracker")
         self.root.geometry(window_state["geometry"])
         self.root.minsize(800, 500)
         
@@ -67,6 +102,9 @@ class MainWindow:
         # Load initial data
         self.refresh_list()
         
+        # Start MAL status updates
+        self.root.after(1000, self.update_mal_status)
+        
         # Configure window close
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
     
@@ -79,8 +117,10 @@ class MainWindow:
         file_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
         file_menu.add_command(label="Add Anime", command=self.add_anime, accelerator="Ctrl+N")
+        file_menu.add_command(label="Search MAL...", command=self.search_mal, accelerator="Ctrl+M")
         file_menu.add_separator()
-        file_menu.add_command(label="Import...", command=self.import_data)
+        file_menu.add_command(label="Import from File...", command=self.import_data)
+        file_menu.add_command(label="Import from MAL User...", command=self.import_mal_user)
         file_menu.add_command(label="Export...", command=self.export_data)
         file_menu.add_separator()
         file_menu.add_command(label="Create Backup", command=self.create_backup)
@@ -91,6 +131,7 @@ class MainWindow:
         # Edit menu
         edit_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="View Details", command=self.view_details)
         edit_menu.add_command(label="Edit Selected", command=self.edit_selected, accelerator="Ctrl+E")
         edit_menu.add_command(label="Delete Selected", command=self.delete_selected, accelerator="Delete")
         edit_menu.add_separator()
@@ -104,6 +145,14 @@ class MainWindow:
         view_menu.add_command(label="Refresh", command=self.refresh_list, accelerator="F5")
         view_menu.add_separator()
         view_menu.add_command(label="Statistics", command=self.show_statistics)
+        
+        # Tools menu
+        tools_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="MAL Authentication...", command=self.show_mal_auth)
+        tools_menu.add_command(label="Sync with MAL", command=self.sync_with_mal_v2)
+        tools_menu.add_separator()
+        tools_menu.add_command(label="Settings...", command=self.show_settings)
         
         # Help menu
         help_menu = Menu(menubar, tearoff=0)
@@ -135,6 +184,46 @@ class MainWindow:
         )
         self.search_entry.pack(side=tk.LEFT, padx=5)
         
+        # MAL toolbar section
+        mal_frame = ttk.Frame(toolbar)
+        mal_frame.pack(side=tk.LEFT, padx=20)
+        
+        # MAL Connect button
+        self.mal_connect_btn = ttk.Button(
+            mal_frame,
+            text="🔗 Connect MAL",
+            command=self.quick_mal_connect
+        )
+        self.mal_connect_btn.pack(side=tk.LEFT, padx=2)
+        
+        # Update button text based on auth status
+        if self.mal_auth_manager.is_authenticated():
+            self.mal_connect_btn.config(text="✓ MAL Connected")
+        
+        # MAL search button
+        ttk.Button(
+            mal_frame,
+            text="🌐 MAL Search",
+            command=self.search_mal
+        ).pack(side=tk.LEFT, padx=2)
+        
+        # Sync button (disabled for Phase 2)
+        self.sync_button = ttk.Button(
+            mal_frame,
+            text="🔄 Sync",
+            command=self.sync_with_mal,
+            state='disabled'
+        )
+        self.sync_button.pack(side=tk.LEFT, padx=2)
+        
+        # Sync status label
+        self.sync_status_label = ttk.Label(
+            mal_frame,
+            text="Sync: Phase 3",
+            foreground='gray'
+        )
+        self.sync_status_label.pack(side=tk.LEFT, padx=5)
+        
         # Filter dropdown
         filter_frame = ttk.Frame(toolbar)
         filter_frame.pack(side=tk.RIGHT, padx=5)
@@ -159,7 +248,7 @@ class MainWindow:
         # Create treeview for anime list
         self.tree = ttk.Treeview(
             main_frame,
-            columns=("title", "progress", "status", "score"),
+            columns=("title", "progress", "status", "score", "mal"),
             show="tree headings",
             selectmode="browse"
         )
@@ -170,13 +259,15 @@ class MainWindow:
         self.tree.heading("progress", text="Progress")
         self.tree.heading("status", text="Status")
         self.tree.heading("score", text="Score")
+        self.tree.heading("mal", text="MAL")
         
         # Column widths
         self.tree.column("#0", width=50, stretch=False)
-        self.tree.column("title", width=400)
+        self.tree.column("title", width=350)
         self.tree.column("progress", width=100, anchor="center")
         self.tree.column("status", width=120, anchor="center")
         self.tree.column("score", width=80, anchor="center")
+        self.tree.column("mal", width=50, anchor="center")
         
         # Scrollbar
         scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -209,6 +300,25 @@ class MainWindow:
         )
         self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=2)
         
+        # MAL connection indicator
+        self.mal_status_label = ttk.Label(
+            self.status_bar,
+            text="MAL: ✗",
+            relief=tk.SUNKEN,
+            anchor=tk.CENTER,
+            foreground='red'
+        )
+        self.mal_status_label.pack(side=tk.LEFT, padx=5, pady=2)
+        
+        # Sync queue indicator
+        self.sync_queue_label = ttk.Label(
+            self.status_bar,
+            text="Queue: 0",
+            relief=tk.SUNKEN,
+            anchor=tk.CENTER
+        )
+        self.sync_queue_label.pack(side=tk.LEFT, padx=5, pady=2)
+        
         self.count_label = ttk.Label(
             self.status_bar,
             text="0 anime",
@@ -222,6 +332,7 @@ class MainWindow:
         # Keyboard shortcuts
         self.root.bind("<Control-n>", lambda e: self.add_anime())
         self.root.bind("<Control-e>", lambda e: self.edit_selected())
+        self.root.bind("<Control-m>", lambda e: self.search_mal())
         self.root.bind("<Delete>", lambda e: self.delete_selected())
         self.root.bind("<F5>", lambda e: self.refresh_list())
         self.root.bind("<Control-f>", lambda e: self.search_entry.focus())
@@ -233,7 +344,7 @@ class MainWindow:
         self.root.bind("<KP_Subtract>", lambda e: self.decrement_episode())
         
         # Tree events
-        self.tree.bind("<Double-Button-1>", lambda e: self.edit_selected())
+        self.tree.bind("<Double-Button-1>", lambda e: self.view_details())
         self.tree.bind("<Button-3>", self.show_context_menu)  # Right-click
         
         # Search events
@@ -258,6 +369,7 @@ class MainWindow:
             # Populate tree
             for anime in anime_list:
                 score_display = str(anime.score) if anime.score else "-"
+                mal_display = "✓" if anime.mal_id else ""
                 
                 self.tree.insert(
                     "",
@@ -267,7 +379,8 @@ class MainWindow:
                         anime.title,
                         anime.display_progress,
                         anime.status,
-                        score_display
+                        score_display,
+                        mal_display
                     )
                 )
             
@@ -348,6 +461,33 @@ class MainWindow:
                 self.notifications.show(f"Deleted '{title}'", NotificationLevel.SUCCESS)
             else:
                 self.error_handler.handle_error(Exception(message), "Delete failed")
+    
+    def view_details(self):
+        """View detailed anime information"""
+        selection = self.tree.selection()
+        if not selection:
+            return
+        
+        item = self.tree.item(selection[0])
+        anime_id = int(item['text'])
+        
+        # Get anime data
+        anime = self.service.get_anime(anime_id)
+        if not anime:
+            return
+        
+        # Open detail dialog
+        from ui.anime_detail_dialog import AnimeDetailDialog
+        AnimeDetailDialog(
+            self.root,
+            anime,
+            self.service,
+            self.image_service,
+            self.mal_service
+        )
+        
+        # Refresh list after dialog closes
+        self.refresh_list()
     
     def mark_completed(self):
         """Mark selected anime as completed"""
@@ -544,19 +684,401 @@ Added This Week: {stats.get('added_this_week', 0)}"""
         else:
             messagebox.showerror("Restore Failed", "Failed to restore from backup")
     
+    def search_mal(self):
+        """Open MAL search dialog"""
+        from ui.mal_search_dialog import MALSearchDialog
+        MALSearchDialog(self.root, self.mal_service, self.service)
+    
+    def import_mal_user(self):
+        """Import anime list from MAL user"""
+        # Simple dialog to get username
+        import tkinter.simpledialog as simpledialog
+        username = simpledialog.askstring(
+            "Import from MAL User",
+            "Enter MyAnimeList username:",
+            parent=self.root
+        )
+        
+        if not username:
+            return
+        
+        # Show progress
+        self.notifications.show("Importing from MAL...", level="info")
+        
+        # Import in background thread
+        import threading
+        thread = threading.Thread(
+            target=self._import_mal_user_thread,
+            args=(username,)
+        )
+        thread.daemon = True
+        thread.start()
+    
+    def _import_mal_user_thread(self, username: str):
+        """Background thread for importing MAL user list"""
+        try:
+            # Get user's anime list
+            anime_list = self.mal_service.get_user_animelist(username)
+            
+            if not anime_list:
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "No Anime Found",
+                    f"No anime found for user '{username}'.\nThe list may be private or the username may be incorrect."
+                ))
+                return
+            
+            # Prepare anime data for preview
+            processed_list = []
+            for mal_anime in anime_list:
+                anime_data = mal_anime.get('anime', {})
+                
+                # Combine data from list and anime info
+                combined = {
+                    'mal_id': anime_data.get('mal_id'),
+                    'title': anime_data.get('title', 'Unknown'),
+                    'title_english': anime_data.get('title_english'),
+                    'title_japanese': anime_data.get('title_japanese'),
+                    'episodes': anime_data.get('episodes'),
+                    'num_episodes_watched': mal_anime.get('episodes_watched', 0),
+                    'score': mal_anime.get('score'),
+                    'watching_status': mal_anime.get('watching_status'),
+                    'synopsis': anime_data.get('synopsis'),
+                    'images': anime_data.get('images', {}),
+                    'genres': anime_data.get('genres', []),
+                    'studios': anime_data.get('studios', [])
+                }
+                
+                # Map MAL status to readable format
+                status_map = {
+                    1: 'watching',
+                    2: 'completed',
+                    3: 'on_hold',
+                    4: 'dropped',
+                    6: 'plan_to_watch'
+                }
+                combined['watching_status'] = status_map.get(
+                    mal_anime.get('watching_status'),
+                    'unknown'
+                )
+                
+                processed_list.append(combined)
+            
+            # Show preview dialog on main thread
+            self.root.after(0, lambda: self._show_import_preview(processed_list))
+            
+        except Exception as e:
+            logger.error(f"Import failed: {e}")
+            self.root.after(0, lambda: messagebox.showerror(
+                "Import Failed",
+                f"Failed to import from MAL: {str(e)}"
+            ))
+    
+    def _show_import_preview(self, anime_list):
+        """Show import preview dialog"""
+        from ui.mal_import_preview_dialog import MALImportPreviewDialog
+        MALImportPreviewDialog(
+            self.root,
+            anime_list,
+            self.service,
+            self.mal_service,
+            self.image_service
+        )
+        # Refresh list after dialog closes
+        self.refresh_list()
+    
+    def _import_complete(self, imported: int, skipped: int):
+        """Show import completion message"""
+        self.refresh_list()
+        message = f"Import complete!\n\nImported: {imported} anime"
+        if skipped > 0:
+            message += f"\nSkipped: {skipped} (already in list)"
+        messagebox.showinfo("Import Complete", message)
+    
+    def sync_with_mal(self):
+        """Sync with MyAnimeList (Phase 3 functionality)"""
+        messagebox.showinfo(
+            "Sync with MAL",
+            "MAL synchronization will be available in Phase 3.\n\n"
+            "This will include:\n"
+            "• OAuth2 authentication\n"
+            "• Push local changes to MAL\n"
+            "• Pull updates from MAL\n"
+            "• Automatic conflict resolution"
+        )
+    
+    def update_mal_status(self):
+        """Update MAL connection status in UI"""
+        # Check if we have MAL connection
+        try:
+            # Simple check - can we reach MAL?
+            test_result = self.mal_service.search_anime("test", limit=1)
+            if test_result is not None:
+                self.mal_status_label.config(
+                    text="MAL: ✓",
+                    foreground='green'
+                )
+            else:
+                self.mal_status_label.config(
+                    text="MAL: ✗",
+                    foreground='red'
+                )
+        except:
+            self.mal_status_label.config(
+                text="MAL: ✗",
+                foreground='red'
+            )
+        
+        # Update sync queue count
+        queue_count = self.sync_service.get_sync_queue_count()
+        self.sync_queue_label.config(text=f"Queue: {queue_count}")
+        
+        # Update sync button state based on authentication
+        if self.sync_service.is_authenticated:
+            self.sync_button.config(state='normal')
+            self.sync_status_label.config(
+                text="Sync: Ready",
+                foreground='green'
+            )
+        else:
+            self.sync_button.config(state='disabled')
+            self.sync_status_label.config(
+                text="Sync: Phase 3",
+                foreground='gray'
+            )
+        
+        # Schedule next update in 30 seconds
+        self.root.after(30000, self.update_mal_status)
+    
+    def quick_mal_connect(self):
+        """Quick MAL connection from toolbar"""
+        if self.mal_auth_manager.is_authenticated():
+            # Already connected, offer to disconnect
+            response = messagebox.askyesno(
+                "MAL Connected",
+                "You are already connected to MyAnimeList.\n\n"
+                "Would you like to disconnect?"
+            )
+            if response:
+                self.mal_auth_manager.oauth_client.logout()
+                self.mal_connect_btn.config(text="🔗 Connect MAL")
+                self.sync_button.config(state='disabled')
+                self.sync_status_label.config(
+                    text="Sync: Disabled",
+                    foreground='gray'
+                )
+                messagebox.showinfo("Disconnected", "Disconnected from MyAnimeList")
+        else:
+            # Not connected, start authentication
+            self.notifications.show("Opening browser for MAL authentication...", level="info")
+            
+            # Start authentication in background thread
+            import threading
+            thread = threading.Thread(target=self._perform_mal_auth)
+            thread.daemon = True
+            thread.start()
+    
+    def _perform_mal_auth(self):
+        """Perform MAL authentication in background"""
+        try:
+            success = self.mal_auth_manager.oauth_client.authorize()
+            
+            if success:
+                # Update UI on main thread
+                self.root.after(0, self._mal_auth_success)
+            else:
+                self.root.after(0, lambda: messagebox.showerror(
+                    "Authentication Failed",
+                    "Failed to authenticate with MyAnimeList.\n\n"
+                    "Please make sure:\n"
+                    "1. You're logged in to MyAnimeList\n"
+                    "2. You authorized the application\n"
+                    "3. Port 8888 is not blocked"
+                ))
+        except Exception as e:
+            self.root.after(0, lambda: messagebox.showerror(
+                "Authentication Error",
+                f"An error occurred during authentication:\n{str(e)}"
+            ))
+    
+    def _mal_auth_success(self):
+        """Handle successful MAL authentication"""
+        # Reinitialize services
+        from services.mal_api_v2_service import MALAPIv2Service
+        self.mal_api_v2_service = MALAPIv2Service(self.mal_auth_manager.oauth_client)
+        
+        # Update sync service
+        self.sync_service.oauth_client = self.mal_auth_manager.oauth_client
+        self.sync_service.mal_api_service = self.mal_api_v2_service
+        self.sync_service.refresh_authentication()
+        self.sync_service.enable_sync()
+        
+        # Update UI
+        self.mal_connect_btn.config(text="✓ MAL Connected")
+        self.sync_button.config(state='normal')
+        self.sync_status_label.config(
+            text="Sync: Ready",
+            foreground='green'
+        )
+        
+        # Update MAL status
+        self.update_mal_status()
+        
+        self.notifications.show("Successfully connected to MyAnimeList!", level="success")
+        
+        # Get user info
+        try:
+            user_info = self.mal_auth_manager.oauth_client.make_api_request("/users/@me")
+            if user_info:
+                username = user_info.get('name', 'Unknown')
+                messagebox.showinfo(
+                    "Connected!",
+                    f"Successfully connected to MyAnimeList!\n\n"
+                    f"Logged in as: {username}"
+                )
+        except:
+            pass
+    
+    def show_mal_auth(self):
+        """Show MAL authentication dialog"""
+        authenticated = self.mal_auth_manager.show_auth_dialog(self.root)
+        
+        if authenticated:
+            # Reinitialize services with OAuth2 client
+            from services.mal_api_v2_service import MALAPIv2Service
+            self.mal_api_v2_service = MALAPIv2Service(self.mal_auth_manager.oauth_client)
+            
+            # Update sync service
+            self.sync_service.oauth_client = self.mal_auth_manager.oauth_client
+            self.sync_service.mal_api_service = self.mal_api_v2_service
+            self.sync_service.refresh_authentication()
+            self.sync_service.enable_sync()
+            
+            # Update sync button state
+            self.sync_button.config(state='normal')
+            self.sync_status_label.config(
+                text="Sync: Ready",
+                foreground='green'
+            )
+            
+            # Update MAL status
+            self.update_mal_status()
+    
+    def sync_with_mal_v2(self):
+        """Sync with MAL using OAuth2 (Phase 3)"""
+        if not self.mal_auth_manager.is_authenticated():
+            response = messagebox.askyesno(
+                "Authentication Required",
+                "You need to authenticate with MyAnimeList to sync.\n\n"
+                "Would you like to authenticate now?"
+            )
+            
+            if response:
+                self.show_mal_auth()
+            return
+        
+        # Show sync options dialog
+        from ui.sync_dialog import SyncDialog
+        dialog = SyncDialog(self.root, self.sync_service)
+        self.root.wait_window(dialog.dialog)
+        
+        if dialog.result:
+            sync_type = dialog.result.get('type')
+            self.notifications.show(f"Starting {sync_type} sync...", level="info")
+            
+            # Perform sync in background
+            import threading
+            thread = threading.Thread(
+                target=self._perform_sync,
+                args=(sync_type,)
+            )
+            thread.daemon = True
+            thread.start()
+    
+    def _perform_sync(self, sync_type: str):
+        """Perform sync operation in background
+        
+        Args:
+            sync_type: Type of sync (push, pull, full)
+        """
+        try:
+            if sync_type == 'push':
+                # Push local changes to MAL
+                success, failed, errors = self.sync_service.process_sync_queue()
+                
+                self.root.after(0, lambda: self.notifications.show(
+                    f"Push complete: {success} succeeded, {failed} failed",
+                    level="success" if failed == 0 else "warning"
+                ))
+                
+            elif sync_type == 'pull':
+                # Pull from MAL
+                added, updated, errors = self.sync_service.full_sync_from_mal()
+                
+                self.root.after(0, lambda: self.notifications.show(
+                    f"Pull complete: {added} added, {updated} updated",
+                    level="success"
+                ))
+                
+                # Refresh list
+                self.root.after(0, self.refresh_list)
+                
+            elif sync_type == 'full':
+                # Full bidirectional sync
+                # First push local changes
+                push_success, push_failed, push_errors = self.sync_service.process_sync_queue()
+                
+                # Then pull from MAL
+                added, updated, pull_errors = self.sync_service.full_sync_from_mal()
+                
+                self.root.after(0, lambda: self.notifications.show(
+                    f"Full sync complete: {push_success} pushed, {added} added, {updated} updated",
+                    level="success"
+                ))
+                
+                # Refresh list
+                self.root.after(0, self.refresh_list)
+                
+            # Show errors if any
+            all_errors = []
+            if sync_type == 'push' and errors:
+                all_errors.extend(errors)
+            elif sync_type in ['pull', 'full'] and errors:
+                all_errors.extend(errors)
+            
+            if all_errors:
+                error_msg = "\\n".join(all_errors[:5])  # Show first 5 errors
+                if len(all_errors) > 5:
+                    error_msg += f"\\n... and {len(all_errors) - 5} more"
+                
+                self.root.after(0, lambda: messagebox.showwarning(
+                    "Sync Warnings",
+                    f"Some items could not be synced:\\n\\n{error_msg}"
+                ))
+                
+        except Exception as e:
+            logger.error(f"Sync failed: {e}")
+            self.root.after(0, lambda: messagebox.showerror(
+                "Sync Failed",
+                f"Sync operation failed:\\n{str(e)}"
+            ))
+    
+    def show_settings(self):
+        """Show settings dialog"""
+        # TODO: Create settings dialog
+        messagebox.showinfo(
+            "Settings",
+            "Settings dialog coming soon!\n\n"
+            "This will include:\n"
+            "• Sync preferences\n"
+            "• Auto-sync options\n"
+            "• Conflict resolution settings\n"
+            "• Theme selection"
+        )
+    
     def show_about(self):
-        """Show about dialog"""
-        about_text = """Anime Tracker v0.1.0
-        
-A desktop application for tracking anime viewing progress.
-
-Created by Aeturnis Development Labs LLC
-https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker
-
-© 2025 Aeturnis Development Labs LLC
-Licensed under MIT License"""
-        
-        messagebox.showinfo("About Anime Tracker", about_text)
+        """Show about/diagnostics dialog"""
+        from ui.about_dialog import AboutDialog
+        AboutDialog(self.root, self.config, self.db)
     
     def set_status(self, message: str):
         """Update status bar message"""

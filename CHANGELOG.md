@@ -8,12 +8,117 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- MyAnimeList.net integration
+- Custom protocol handler (animetracker://) for improved OAuth2 flow
+- Browser extension for streaming service integration
 - Advanced statistics and analytics
 - Themes and customization options
 - Cloud synchronization
 
-## [0.1.0] - 2025-01-20
+## [0.3.0] - 2025-09-07
+
+### Added
+- **MyAnimeList Integration (Phase 2 & 3 Complete)**
+  - Full MAL API v2 integration with OAuth2 authentication (PKCE flow)
+  - Bidirectional synchronization with MyAnimeList
+  - Import anime from MAL search
+  - Import full user anime list from MAL
+  - Push local changes to MAL
+  - Pull updates from MAL
+  - Sync queue for offline changes
+  
+- **MAL Search & Import**
+  - Search MAL database directly from app
+  - Import anime metadata (synopsis, genres, studios, images)
+  - Import user's complete MAL list
+  - Auto-populate anime details from MAL
+  - Image caching for cover art
+  
+- **Authentication System**
+  - OAuth2 with PKCE implementation
+  - Secure token storage
+  - Auto-refresh expired tokens
+  - MAL authentication dialog
+  - Connect/Disconnect from toolbar
+  
+- **Sync Features**
+  - Push to MAL: Upload local changes
+  - Pull from MAL: Download MAL updates
+  - Full sync: Bidirectional synchronization
+  - Conflict detection
+  - Sync status indicators
+  - Sync history tracking
+  
+- **API Services**
+  - Jikan API integration for public data
+  - MAL API v2 for authenticated operations
+  - Rate limiting (60 req/min for Jikan)
+  - Response caching with TTL
+  - Automatic retry logic
+  - Token bucket rate limiter
+  
+- **UI Enhancements**
+  - MAL Connect button in toolbar
+  - MAL Search dialog with preview
+  - Import preview dialog
+  - Sync dialog with options
+  - MAL status indicators
+  - Progress notifications
+
+### Known Issues
+- OAuth2 callback may fail on some systems (localhost:8888 redirect issues)
+- MAL authentication dialog buttons may appear thin on some displays
+- Token exchange occasionally fails requiring retry
+- Browser may not auto-close after OAuth2 authorization
+
+### Technical
+- Implemented MAL OAuth2 client with PKCE
+- Created MAL API v2 service layer
+- Added sync service with queue management
+- Database schema v2 with sync support
+- Image service for cover art management
+- Note: Some unit tests need updating for new MAL service API
+
+## [0.1.1] - 2025-09-07
+
+### Added
+- **About/Diagnostics Dialog**
+  - System information display
+  - Application diagnostics
+  - Path verification with existence indicators
+  - Database statistics
+  - Memory usage tracking
+
+### Fixed
+- **Version Management**
+  - Unified version string across all components (was 0.1.0-dev, now 0.1.1)
+  - Dynamic version display in window title and About dialog
+  
+- **Path Consistency**
+  - Unified logging directory with config directory
+  - Logs now stored under data directory/logs
+  - Consistent path handling across Windows/Linux/Mac
+  
+- **Code Quality**
+  - Removed stray duplicate import in config.py
+  - Removed unused ttk import in notifications.py
+  - Thread shutdown already properly implemented in MainWindow.on_close
+  
+- **Data Management**
+  - date_added and date_updated now properly set when creating/updating anime
+  - Timestamps automatically managed by service layer
+  
+- **Import/Export**
+  - Improved CSV import error messages with row numbers
+  - Enhanced JSON import validation with detailed error reporting
+  - Better handling of invalid data during import
+  - Score validation (0-10 range) during import
+
+### Changed
+- Version logging at application startup
+- Config now accepts instance for logging setup
+- Better error context in import operations
+
+## [0.1.0] - 2025-09-06
 
 ### Added
 - **Core Features**
@@ -83,10 +188,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **0.3.0** - MyAnimeList integration with OAuth2 and full synchronization (Phase 2 & 3 complete)
+- **0.1.1** - Bug fixes and improvements based on v0.1.0 feedback  
 - **0.1.0** - Initial release with core local functionality (Phase 1)
-- **0.2.0** - (Planned) MyAnimeList integration (Phase 2)
-- **0.3.0** - (Planned) Synchronization features (Phase 3)
-- **1.0.0** - (Planned) Production-ready release (Phase 4)
+- **0.4.0** - (Planned) Custom protocol handler for improved OAuth2 flow
+- **1.0.0** - (Planned) Production-ready release with streaming integration
 
-[Unreleased]: https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/compare/v0.1.1...v0.3.0
+[0.1.1]: https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/releases/tag/v0.1.0

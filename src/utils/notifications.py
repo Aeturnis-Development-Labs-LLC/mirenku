@@ -1,7 +1,6 @@
 """Notification and error handling system"""
 
 import tkinter as tk
-from tkinter import ttk
 import logging
 from typing import Optional, Callable
 from enum import Enum

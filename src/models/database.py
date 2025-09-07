@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class Database:
     """Manages SQLite database connection and operations"""
     
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
     
     def __init__(self, db_path: Path):
         """Initialize database connection
@@ -208,11 +208,82 @@ class Database:
         logger.info(f"Migrating schema from version {from_version} to {self.SCHEMA_VERSION}")
         
         # Add migration logic here for future versions
-        # Example:
-        # if from_version < 2:
-        #     self._migrate_to_v2()
+        if from_version < 2:
+            self._migrate_to_v2()
         
         self._set_schema_version()
+    
+    def _migrate_to_v2(self):
+        """Migrate to schema version 2 - Add sync support fields"""
+        logger.info("Applying migration to schema v2: Adding sync support")
+        
+        with self.get_cursor() as cursor:
+            # Add sync_status to anime table if it doesn't exist
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM pragma_table_info('anime') 
+                WHERE name='sync_status'
+            """)
+            
+            if cursor.fetchone()['count'] == 0:
+                cursor.execute("""
+                    ALTER TABLE anime 
+                    ADD COLUMN sync_status TEXT DEFAULT 'local_only' 
+                    CHECK(sync_status IN ('local_only', 'synced', 'pending_upload', 'pending_download', 'conflict'))
+                """)
+                logger.info("Added sync_status column to anime table")
+            
+            # Add last_mal_sync column if it doesn't exist
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM pragma_table_info('anime') 
+                WHERE name='last_mal_sync'
+            """)
+            
+            if cursor.fetchone()['count'] == 0:
+                cursor.execute("""
+                    ALTER TABLE anime 
+                    ADD COLUMN last_mal_sync TIMESTAMP
+                """)
+                logger.info("Added last_mal_sync column to anime table")
+            
+            # Create sync_queue table for offline operations
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sync_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    anime_id INTEGER NOT NULL,
+                    operation TEXT NOT NULL CHECK(operation IN ('create', 'update', 'delete')),
+                    data TEXT,  -- JSON data for the operation
+                    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'completed', 'failed')),
+                    retry_count INTEGER DEFAULT 0,
+                    error_message TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    processed_at TIMESTAMP,
+                    FOREIGN KEY (anime_id) REFERENCES anime(id) ON DELETE CASCADE
+                )
+            """)
+            
+            # Create index for sync_queue
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sync_queue_status 
+                ON sync_queue(status)
+            """)
+            
+            # Add MAL credentials table (encrypted storage)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS mal_credentials (
+                    id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    access_token TEXT,  -- Will be encrypted
+                    refresh_token TEXT, -- Will be encrypted
+                    token_expiry TIMESTAMP,
+                    client_id TEXT,
+                    client_secret TEXT, -- Will be encrypted
+                    last_auth TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            logger.info("Schema migration to v2 completed")
     
     def execute(self, query: str, params: Optional[Tuple] = None) -> sqlite3.Cursor:
         """Execute a query
