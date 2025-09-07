@@ -1,0 +1,10 @@
+# Core dependencies
+Pillow==10.2.0          # Image handling
+requests==2.31.0        # HTTP requests for future MAL integration
+
+# Development dependencies
+pytest==7.4.4           # Testing framework
+pyinstaller==6.3.0      # Create standalone executable
+
+# Optional - for future MAL integration
+jikanpy==4.3.2          # MyAnimeList API wrapper

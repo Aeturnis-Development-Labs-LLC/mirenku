@@ -1,0 +1,97 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+
+# PyInstaller
+*.spec
+build/
+dist/
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# User data (development)
+data/
+user_data/
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Documentation
+docs/_build/
+# Keep design docs local
+docs/DESIGN.md
+docs/TODO.md
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+~*
+
+# Configuration (with sensitive data)
+config.ini
+settings.json
+secrets.json
+
+# Cache
+cache/
+.cache/
+*.cache
+
+# Images cache (development)
+image_cache/
+
+# OS specific
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Backup files
+*.backup
+*.old
