@@ -1,7 +1,7 @@
-# Anime Tracker
+# Mirenku
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/releases)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases)
+[![License](https://img.shields.io/badge/license-Prosperity%203.0-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen.svg)](tests/)
 
@@ -42,8 +42,8 @@ A powerful desktop application for tracking your anime viewing progress with MyA
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker.git
-cd anime-tracker
+git clone https://github.com/Aeturnis-Development-Labs-LLC/mirenku.git
+cd mirenku
 ```
 
 2. **Install dependencies:**
@@ -58,7 +58,7 @@ python src/main.py
 
 ### Option 2: Windows Executable (Coming Soon)
 
-Download the latest `.exe` file from the [Releases](https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/releases) page.
+Download the latest `.exe` file from the [Releases](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases) page.
 
 ## 🔗 MyAnimeList Setup
 

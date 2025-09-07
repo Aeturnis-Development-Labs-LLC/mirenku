@@ -1,4 +1,4 @@
-"""Main window for Anime Tracker application"""
+"""Main window for Mirenku application"""
 
 import tkinter as tk
 from tkinter import ttk, messagebox, Menu
@@ -80,9 +80,11 @@ class MainWindow:
         # Window configuration
         try:
             from __init__ import __version__
-            self.root.title(f"Anime Tracker v{__version__}")
+            self.root.title(f"Mirenku v{__version__}")
         except ImportError:
-            self.root.title("Anime Tracker")
+            self.root.title("Mirenku")
+        
+            
         self.root.geometry(window_state["geometry"])
         self.root.minsize(800, 500)
         

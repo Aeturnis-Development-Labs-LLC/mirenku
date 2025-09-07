@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Anime Tracker - Main Entry Point
+Mirenku - Main Entry Point
 A desktop application for tracking anime viewing progress
 """
 
@@ -16,6 +16,8 @@ from ui.main_window import MainWindow
 import tkinter as tk
 from utils.config import Config
 from utils.logging_config import setup_logging, clean_old_logs
+from utils.icon_helper import set_app_icon, set_taskbar_icon
+from utils.windows_icon_fix import force_windows_icon, set_console_icon
 from models.database import Database
 
 
@@ -30,14 +32,45 @@ def main():
         
         # Log version
         from __init__ import __version__
-        logging.info(f"Anime Tracker v{__version__} starting...")
+        logging.info(f"Mirenku v{__version__} starting...")
         
         # Initialize database
         db = Database(config.get_db_path())
         db.initialize()
         
+        # Apply Windows-specific icon fixes early
+        force_windows_icon()
+        set_console_icon()
+        set_taskbar_icon()
+        
         # Create and run main application
         root = tk.Tk()
+        
+        # Set application icon with proper path handling for frozen exe
+        try:
+            if getattr(sys, 'frozen', False):
+                # Running as executable - use bundled icon
+                icon_path = Path(sys._MEIPASS) / "assets" / "mirenku.ico"
+            else:
+                # Running as script
+                icon_path = Path(__file__).parent.parent / "assets" / "mirenku.ico"
+            
+            if icon_path.exists():
+                root.iconbitmap(default=str(icon_path))
+                root.wm_iconbitmap(str(icon_path))
+                logging.info(f"Icon set from: {icon_path}")
+            else:
+                logging.warning(f"Icon not found at: {icon_path}")
+                # Try the icon helper as fallback
+                set_app_icon(root)
+        except Exception as e:
+            logging.debug(f"Could not set icon: {e}")
+            set_app_icon(root)
+        
+        # Apply Windows icon fix again after window creation
+        root.update_idletasks()
+        force_windows_icon()
+        
         app = MainWindow(root, db)
         
         # Center window on screen
@@ -58,7 +91,7 @@ def main():
         import tkinter.messagebox as messagebox
         messagebox.showerror(
             "Startup Error",
-            f"Failed to start Anime Tracker:\n\n{str(e)}\n\nCheck the logs for details."
+            f"Failed to start Mirenku:\n\n{str(e)}\n\nCheck the logs for details."
         )
         sys.exit(1)
 

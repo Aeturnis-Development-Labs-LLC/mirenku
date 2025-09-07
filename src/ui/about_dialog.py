@@ -1,4 +1,4 @@
-"""About/Diagnostics dialog for Anime Tracker"""
+"""About/Diagnostics dialog for Mirenku"""
 
 import tkinter as tk
 from tkinter import ttk, scrolledtext
@@ -32,7 +32,7 @@ class AboutDialog:
         
         # Create dialog window
         self.dialog = tk.Toplevel(parent)
-        self.dialog.title("About Anime Tracker")
+        self.dialog.title("About Mirenku")
         self.dialog.geometry("600x500")
         self.dialog.resizable(False, False)
         
@@ -88,7 +88,7 @@ class AboutDialog:
         # Logo/Title
         title_label = ttk.Label(
             parent,
-            text="Anime Tracker",
+            text="Mirenku",
             font=('Helvetica', 18, 'bold')
         )
         title_label.pack(pady=(20, 5))
@@ -145,14 +145,14 @@ and keep notes on your favorite shows."""
         
         license_label = ttk.Label(
             parent,
-            text="Licensed under MIT License",
+            text="Licensed under Prosperity Public License 3.0.0",
             font=('Helvetica', 10)
         )
         license_label.pack()
         
         github_label = ttk.Label(
             parent,
-            text="github.com/Aeturnis-Development-Labs-LLC/anime-tracker",
+            text="github.com/Aeturnis-Development-Labs-LLC/mirenku",
             font=('Helvetica', 9),
             foreground='blue',
             cursor='hand2'

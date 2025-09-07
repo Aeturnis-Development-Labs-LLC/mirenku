@@ -1,5 +1,5 @@
 """
-Anime Tracker Application
+Mirenku - Anime Tracking Application
 Version: 0.3.0
 """
 
