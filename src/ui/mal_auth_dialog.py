@@ -229,8 +229,8 @@ Click 'Connect to MAL' to:
                 foreground='blue'
             ))
             
-            # Perform authentication
-            success = self.oauth_client.authorize()
+            # Perform authentication with protocol handler (120 second timeout)
+            success = self.oauth_client.authorize(timeout=120)
             
             # Update UI on main thread
             self.dialog.after(0, lambda: self._auth_complete(success))
@@ -336,9 +336,9 @@ class MALAuthManager:
             import sys
             from pathlib import Path
             sys.path.insert(0, str(Path(__file__).parent.parent))
-            from services.mal_oauth2_client import MALOAuth2Client
+            from services.mal_oauth2_protocol import MALOAuth2ProtocolClient
             token_path = config_dir / "mal_tokens.json"
-            self.oauth_client = MALOAuth2Client(self.client_id, token_path)
+            self.oauth_client = MALOAuth2ProtocolClient(self.client_id, token_path)
         else:
             self.oauth_client = None
     

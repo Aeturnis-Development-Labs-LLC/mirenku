@@ -29,8 +29,14 @@ A powerful desktop application for tracking your anime viewing progress with MyA
 - **Cover Art** - Download and cache anime cover images
 - **Offline Queue** - Queue changes when offline, sync when connected
 
-### 🚀 Planned Features
-- 🔄 Custom protocol handler for improved OAuth2 (v0.4.0)
+### 🚀 New in v0.3.0
+- ✅ **Custom Protocol Handler** - Seamless OAuth2 with `mirenku://` protocol
+- ✅ **Secure Token Storage** - Three-tier encryption for credentials
+- ✅ **First-Run Experience** - Automatic setup wizard
+- ✅ **PKCE Security** - Industry-standard OAuth2 security
+- ✅ **Auto Token Refresh** - Never re-authenticate manually
+
+### 🔮 Planned Features
 - 🔄 Browser extension for streaming service integration
 - 🔄 Advanced statistics and analytics
 - 🔄 Dark/Light theme support
@@ -62,25 +68,36 @@ Download the latest `.exe` file from the [Releases](https://github.com/Aeturnis-
 
 ## 🔗 MyAnimeList Setup
 
-### Connecting to MAL (Beta - v0.3.0)
+### Quick Connect (v0.3.0+)
 
-1. **Register your MAL app** (one-time setup for developers):
-   - Go to https://myanimelist.net/apiconfig
-   - Create a new application
-   - Set redirect URL to: `http://localhost:8888/callback`
-   - Note your Client ID
+1. **First Launch**:
+   - Mirenku will show a welcome dialog on first run
+   - Check "Register protocol handler" for seamless OAuth
+   - Click "Continue" to set up
 
-2. **Connect in the app**:
-   - Click the "🔗 Connect MAL" button in the toolbar
-   - Your browser will open to MyAnimeList
-   - Log in and authorize the application
-   - You'll be redirected back to the app
+2. **Connect to MyAnimeList**:
+   - Click **File → Connect to MAL** or press `Ctrl+Shift+M`
+   - Click "Connect to MAL" button
+   - Your browser opens to MyAnimeList
+   - Log in and authorize Mirenku
+   - You're automatically returned to the app - no copying codes!
 
-3. **Sync your anime**:
-   - Use "Tools → Sync with MAL" to sync your lists
+3. **Sync Your Anime**:
+   - Use **Tools → Sync with MAL** to sync your lists
    - Choose Push (upload), Pull (download), or Full sync
+   - Tokens refresh automatically - authenticate once, sync forever
 
-**Note**: OAuth2 authentication is currently in beta. Some users may experience issues with the localhost callback. This will be improved in v0.4.0 with a custom protocol handler.
+### Security Features
+- **No Password Storage** - Only secure OAuth tokens
+- **Encrypted Tokens** - Three-tier encryption (OS Keyring → Fernet → Base64)
+- **PKCE Protection** - Prevents authorization code interception
+- **Automatic Refresh** - Tokens refresh seamlessly in background
+
+### Advanced Setup (Optional)
+For developers wanting to use their own Client ID:
+1. Register at [MAL API Config](https://myanimelist.net/apiconfig)
+2. Set redirect URL to: `mirenku://auth`
+3. Enter your Client ID in Settings → MyAnimeList
 
 ## 🎮 Usage
 
@@ -90,12 +107,44 @@ Download the latest `.exe` file from the [Releases](https://github.com/Aeturnis-
 - `Delete` - Delete selected anime
 - `Ctrl+F` - Focus search box
 - `Ctrl+S` - Force save (though auto-save is enabled)
+- `Ctrl+Shift+M` - Open MAL connection dialog
+- `Ctrl+,` - Open Settings
 
 ### Quick Actions
 - **Double-click** any anime to edit it
 - **Right-click** for context menu
 - Use **+/-** buttons to quickly update episode count
 - Click column headers to sort
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**Browser doesn't open when connecting to MAL:**
+- Check your default browser settings
+- Try manually copying the URL from the logs
+- Ensure no firewall is blocking the browser
+
+**"Protocol not registered" error:**
+- Open Settings → Protocol tab
+- Click "Register Protocol"
+- Restart Mirenku
+
+**OAuth fails after moving Mirenku to new folder:**
+- Launch Mirenku from the new location
+- Accept the prompt to update protocol registration
+- Reconnect to MAL if needed
+
+**"Not primary instance" error:**
+- Close all Mirenku windows
+- Check Task Manager for lingering processes
+- Restart Mirenku
+
+**Token expired errors:**
+- Mirenku should auto-refresh tokens
+- If it fails, disconnect and reconnect in Settings
+
+For more detailed troubleshooting, see [OAuth User Guide](docs/OAUTH_USER_GUIDE.md).
 
 ## 🛠️ Development
 
@@ -125,12 +174,17 @@ python tests/test_end_to_end.py
 
 # Run with coverage
 python -m pytest tests/ --cov=src
+
+# Run OAuth tests specifically
+python -m pytest tests/test_mal_oauth2_protocol*.py tests/test_integration_oauth.py
 ```
 
 **Test Coverage:** 
-- 74 unit tests
+- 150+ unit tests
+- 11 integration tests
 - 6 end-to-end tests
-- >80% code coverage
+- 81% OAuth module coverage
+- >75% overall code coverage
 
 ### Building Executable
 
@@ -158,9 +212,9 @@ We welcome contributions! Here's how you can help:
 
 ## 📊 Project Status
 
-- **Current Version:** v0.1.0 (Phase 1 Complete)
-- **Next Release:** v0.2.0 (MyAnimeList Integration)
-- **Test Status:** All 80 tests passing
+- **Current Version:** v0.3.0 (OAuth2 Integration Complete)
+- **Next Release:** v0.3.1 (Bug fixes and polish)
+- **Test Status:** 150+ tests passing (81% OAuth coverage)
 - **Platform:** Windows (primary), Linux/Mac (experimental)
 
 ## 📝 Versioning
@@ -168,8 +222,9 @@ We welcome contributions! Here's how you can help:
 We use [Semantic Versioning](http://semver.org/). For available versions, see the [tags on this repository](https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/tags).
 
 - **v0.1.0** - Local functionality complete ✅
-- **v0.2.0** - MyAnimeList integration (planned)
-- **v0.3.0** - Synchronization features (planned)
+- **v0.2.0** - MyAnimeList integration ✅
+- **v0.3.0** - OAuth2 with custom protocol handler ✅
+- **v0.3.1** - Bug fixes and polish (in progress)
 - **v1.0.0** - Production release (planned)
 
 ## 📜 License
@@ -178,10 +233,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- [MyAnimeList](https://myanimelist.net/) for anime data (future integration)
-- [Jikan API](https://jikan.moe/) for unofficial MAL API (planned)
+- [MyAnimeList](https://myanimelist.net/) for anime data and OAuth2 API
 - [Tkinter](https://docs.python.org/3/library/tkinter.html) for the GUI framework
 - [SQLite](https://www.sqlite.org/) for local data storage
+- [Cryptography](https://cryptography.io/) for secure token storage
+- [Keyring](https://pypi.org/project/keyring/) for OS credential management
 
 ## 📧 Contact
 

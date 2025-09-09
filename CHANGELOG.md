@@ -8,11 +8,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Custom protocol handler (animetracker://) for improved OAuth2 flow
 - Browser extension for streaming service integration
 - Advanced statistics and analytics
 - Themes and customization options
 - Cloud synchronization
+- AniList integration
+
+## [0.3.1] - 2025-09-09
+
+### Added
+- **Custom Protocol Handler (`mirenku://`)**
+  - Eliminates localhost:8888 callback issues
+  - Automatic registration on first run
+  - Works with portable installations
+  - Browser returns directly to app
+  
+- **Enhanced Security**
+  - Three-tier token encryption (OS Keyring → Fernet → Base64)
+  - PKCE implementation for OAuth2
+  - State parameter validation (CSRF protection)
+  - Secure token storage with automatic migration
+  
+- **Improved User Experience**
+  - First-run welcome dialog with setup wizard
+  - One-click OAuth authentication
+  - Automatic token refresh
+  - Protocol management in Settings
+  - Test protocol button
+  
+- **Developer Features**
+  - 50+ new OAuth tests (81% coverage)
+  - Comprehensive OAuth documentation
+  - Integration test suite
+  - Custom Client ID support
+
+### Changed
+- OAuth2 now uses `mirenku://` protocol instead of localhost
+- MAL auth dialog uses new `MALOAuth2ProtocolClient`
+- Token storage automatically migrates to encrypted format
+- Updated README with new OAuth instructions
+- Improved error messages throughout
+
+### Fixed
+- OAuth callback timeout issues completely resolved
+- Token refresh failures during long sync operations
+- "Not primary instance" errors with multiple windows
+- Protocol registration on Windows 11
+- MAL sync hanging on expired tokens
+- Auth dialog not closing after successful login
+- Settings dialog protocol tab initialization
+- Keyboard shortcuts conflict with OAuth dialog
+
+### Security
+- Tokens encrypted using OS credential manager when available
+- PKCE prevents authorization code interception
+- State validation prevents CSRF attacks
+- No passwords stored, only encrypted OAuth tokens
+- Token leakage prevention in logs
 
 ## [0.3.0] - 2025-09-07
 
@@ -188,13 +240,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **0.3.1** - OAuth2 improvements with custom protocol handler (mirenku://)
 - **0.3.0** - MyAnimeList integration with OAuth2 and full synchronization (Phase 2 & 3 complete)
 - **0.1.1** - Bug fixes and improvements based on v0.1.0 feedback  
 - **0.1.0** - Initial release with core local functionality (Phase 1)
-- **0.4.0** - (Planned) Custom protocol handler for improved OAuth2 flow
+- **0.4.0** - (Planned) Browser extension and advanced features
 - **1.0.0** - (Planned) Production-ready release with streaming integration
 
-[Unreleased]: https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/compare/v0.1.1...v0.3.0
 [0.1.1]: https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Aeturnis-Development-Labs-LLC/anime-tracker/releases/tag/v0.1.0
