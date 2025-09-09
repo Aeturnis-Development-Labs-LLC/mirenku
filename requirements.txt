@@ -1,6 +1,10 @@
 # Core dependencies
-Pillow==10.2.0          # Image handling
-requests==2.31.0        # HTTP requests for future MAL integration
+Pillow>=10.4.0          # Image handling (security fix for buffer overflow)
+requests>=2.32.3        # HTTP requests for MAL (security fix for .netrc leak)
+
+# OAuth2 and Security
+keyring>=24.0.0         # Secure token storage (OS keyring)
+cryptography>=41.0.0    # Fernet encryption for token fallback
 
 # Development dependencies
 pytest==7.4.4           # Testing framework
