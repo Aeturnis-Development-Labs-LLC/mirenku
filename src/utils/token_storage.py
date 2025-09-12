@@ -84,8 +84,9 @@ class TokenStorage:
         if HAS_CRYPTO:
             return "fernet"
         
-        logger.warning("No secure encryption available! Using base64 encoding (NOT SECURE)")
-        return "base64"
+        # No secure storage available - refuse to continue
+        logger.error("No secure encryption available! Cannot store tokens safely.")
+        return "unavailable"
     
     def _init_fernet(self):
         """Initialize Fernet encryption with key management"""
@@ -107,12 +108,13 @@ class TokenStorage:
         key = self.key_file.read_bytes()
         self.fernet = Fernet(key)
     
-    def save_tokens(self, tokens: Dict[str, Any]) -> bool:
+    def save_tokens(self, tokens: Dict[str, Any], user_accepts_risk: bool = False) -> bool:
         """
         Save OAuth tokens securely
         
         Args:
             tokens: Dictionary containing access_token, refresh_token, etc.
+            user_accepts_risk: User explicitly accepts security risk (for emergency fallback)
             
         Returns:
             True if saved successfully, False otherwise
@@ -123,8 +125,12 @@ class TokenStorage:
                 return self._save_keyring(tokens)
             elif self.storage_method == "fernet":
                 return self._save_fernet(tokens)
-            else:
+            elif self.storage_method == "base64" and user_accepts_risk:
                 return self._save_base64(tokens)
+            else:
+                logger.error("No secure storage method available. Tokens will not be saved.")
+                logger.error("Please install 'keyring' or 'cryptography' package for secure token storage.")
+                return False
                 
         except Exception as e:
             logger.error(f"Failed to save tokens with {self.storage_method}: {e}")
@@ -138,10 +144,10 @@ class TokenStorage:
                     self._init_fernet()
                     return self._save_fernet(tokens)
                 else:
-                    # Fallback to base64
-                    logger.warning("Falling back to base64 (NOT SECURE)")
-                    self.storage_method = "base64"
-                    return self._save_base64(tokens)
+                    # No secure fallback available
+                    logger.error("No secure storage fallback available. Tokens cannot be saved.")
+                    logger.error("Please install 'keyring' or 'cryptography' package.")
+                    return False
             
             return False
     
@@ -157,8 +163,12 @@ class TokenStorage:
                 tokens = self._load_keyring()
             elif self.storage_method == "fernet":
                 tokens = self._load_fernet()
-            else:
+            elif self.storage_method == "base64":
+                # Only load if it exists from before security update
+                logger.warning("Loading tokens from insecure base64 storage (legacy)")
                 tokens = self._load_base64()
+            else:
+                return None
             
             return tokens
             
@@ -230,10 +240,12 @@ class TokenStorage:
         decrypted = self.fernet.decrypt(encrypted)
         return json.loads(decrypted.decode())
     
-    # Base64 methods (not secure)
+    # Base64 methods (legacy support only)
     def _save_base64(self, tokens: Dict[str, Any]) -> bool:
-        """Save tokens with base64 encoding (NOT SECURE)"""
-        logger.warning("Saving tokens with base64 encoding - NOT SECURE!")
+        """Save tokens with base64 encoding (INSECURE - EMERGENCY USE ONLY)"""
+        logger.critical("SECURITY WARNING: Saving tokens with base64 encoding!")
+        logger.critical("This is NOT encryption and tokens are readable by anyone with file access!")
+        logger.critical("Install 'keyring' or 'cryptography' package for secure storage.")
         json_data = json.dumps(tokens)
         encoded = base64.b64encode(json_data.encode()).decode()
         self.base64_file.write_text(encoded)
@@ -255,15 +267,19 @@ class TokenStorage:
             return
         
         # Check if base64 tokens exist and can be migrated
-        if self.base64_file.exists() and self.storage_method != "base64":
+        if self.base64_file.exists() and self.storage_method in ["keyring", "fernet"]:
             try:
                 tokens = self._load_base64()
                 if tokens:
-                    logger.info("Migrating tokens to more secure storage")
-                    self.save_tokens(tokens)
+                    logger.info("Migrating tokens from insecure storage to secure storage")
+                    # Force migration without user consent since we have secure method
+                    if self.storage_method == "keyring":
+                        self._save_keyring(tokens)
+                    elif self.storage_method == "fernet":
+                        self._save_fernet(tokens)
                     # Delete old base64 file
                     self.base64_file.unlink()
-                    logger.info("Token migration completed")
+                    logger.info("Token migration completed - insecure storage removed")
             except Exception as e:
                 logger.error(f"Failed to migrate tokens: {e}")
     
@@ -277,6 +293,7 @@ class TokenStorage:
         return {
             "method": self.storage_method,
             "secure": self.storage_method in ["keyring", "fernet"],
+            "available": self.storage_method != "unavailable",
             "app_name": self.app_name,
             "has_tokens": self.load_tokens() is not None
         }
