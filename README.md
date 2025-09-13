@@ -1,9 +1,16 @@
 # Mirenku
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases)
+[![CI/CD](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/actions/workflows/ci.yml/badge.svg)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/actions/workflows/ci.yml)
+[![Tests](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/actions/workflows/cross-platform-test.yml/badge.svg)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/actions/workflows/cross-platform-test.yml)
+[![codecov](https://codecov.io/gh/Aeturnis-Development-Labs-LLC/mirenku/branch/main/graph/badge.svg)](https://codecov.io/gh/Aeturnis-Development-Labs-LLC/mirenku)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/Aeturnis-Development-Labs-LLC/mirenku/main.svg)](https://results.pre-commit.ci/latest/github/Aeturnis-Development-Labs-LLC/mirenku/main)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+[![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases)
 [![License](https://img.shields.io/badge/license-Prosperity%203.0-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-80%20passing-brightgreen.svg)](tests/)
+[![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku)
 
 A powerful desktop application for tracking your anime viewing progress with MyAnimeList integration and synchronization.
 
@@ -179,7 +186,7 @@ python -m pytest tests/ --cov=src
 python -m pytest tests/test_mal_oauth2_protocol*.py tests/test_integration_oauth.py
 ```
 
-**Test Coverage:** 
+**Test Coverage:**
 - 150+ unit tests
 - 11 integration tests
 - 6 end-to-end tests

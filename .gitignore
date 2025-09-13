@@ -38,7 +38,6 @@ ENV/
 .claude/
 
 # PyInstaller
-*.spec
 build/
 dist/
 
@@ -62,10 +61,10 @@ logs/
 htmlcov/
 .tox/
 .hypothesis/
-test_*.py
 test_cache/
 test_mal_cache/
-**/test_*.py  # Test files outside tests/ directory
+# Only ignore test files in root, not in tests/ directory
+/test_*.py
 
 # Documentation
 docs/_build/
@@ -102,3 +101,30 @@ desktop.ini
 # Backup files
 *.backup
 *.old
+
+# Release artifacts
+release/
+mirenku_v*.zip
+mirenku_v*.sha256
+*.exe
+
+# Development/Debug files
+clear_tokens.py
+diagnose_oauth.py
+sync_test.log
+*_test.py
+test_*.py
+
+# Linting and formatting
+.ruff_cache/
+.mypy_cache/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Version info for PyInstaller
+version_info.txt

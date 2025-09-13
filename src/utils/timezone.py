@@ -1,8 +1,7 @@
 """Timezone utilities for consistent timestamp handling"""
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-
 
 # EST/EDT timezone (UTC-5 or UTC-4 during daylight saving)
 EST = timezone(timedelta(hours=-5))
@@ -11,7 +10,7 @@ EDT = timezone(timedelta(hours=-4))
 
 def get_current_datetime() -> datetime:
     """Get current datetime in EST/EDT timezone
-    
+
     Returns:
         Current datetime in Eastern timezone
     """
@@ -22,7 +21,7 @@ def get_current_datetime() -> datetime:
 
 def get_utc_now() -> datetime:
     """Get current UTC datetime
-    
+
     Returns:
         Current datetime in UTC
     """
@@ -31,57 +30,56 @@ def get_utc_now() -> datetime:
 
 def to_est(dt: Optional[datetime]) -> Optional[datetime]:
     """Convert datetime to EST timezone
-    
+
     Args:
         dt: Datetime to convert (assumes UTC if no timezone)
-        
+
     Returns:
         Datetime in EST or None if input is None
     """
     if dt is None:
         return None
-    
+
     # If naive datetime, assume UTC
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    
+
     return dt.astimezone(EST)
 
 
 def format_datetime(dt: Optional[datetime], include_time: bool = True) -> str:
     """Format datetime for display
-    
+
     Args:
         dt: Datetime to format
         include_time: Whether to include time in output
-        
+
     Returns:
         Formatted string or empty string if None
     """
     if dt is None:
         return ""
-    
+
     # Convert to EST for display
     dt_est = to_est(dt)
-    
+
     if include_time:
         return dt_est.strftime("%Y-%m-%d %I:%M %p EST")
-    else:
-        return dt_est.strftime("%Y-%m-%d")
+    return dt_est.strftime("%Y-%m-%d")
 
 
 def parse_datetime(date_str: str) -> Optional[datetime]:
     """Parse datetime string
-    
+
     Args:
         date_str: DateTime string to parse
-        
+
     Returns:
         Datetime object or None if parsing fails
     """
     if not date_str:
         return None
-    
+
     # Try common formats
     formats = [
         "%Y-%m-%d %H:%M:%S",
@@ -89,9 +87,9 @@ def parse_datetime(date_str: str) -> Optional[datetime]:
         "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%dT%H:%M:%SZ",
         "%Y-%m-%dT%H:%M:%S.%f",
-        "%Y-%m-%dT%H:%M:%S.%fZ"
+        "%Y-%m-%dT%H:%M:%S.%fZ",
     ]
-    
+
     for fmt in formats:
         try:
             dt = datetime.strptime(date_str, fmt)
@@ -101,5 +99,5 @@ def parse_datetime(date_str: str) -> Optional[datetime]:
             return dt
         except ValueError:
             continue
-    
+
     return None

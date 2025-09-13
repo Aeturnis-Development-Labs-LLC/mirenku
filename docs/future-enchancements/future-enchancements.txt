@@ -1,0 +1,51 @@
+Data & Ownership Enhancers
+
+Custom Tags / Labels → let users add arbitrary tags like “rewatch,” “favorites,” “recommend to friends.” Stored locally, exportable.
+
+Snapshots / Versioned Backups → instead of just one backup, allow “timeline saves” (like Git commits) so users can restore their list at any point.
+
+Portable Mode → fully self-contained Mirenku folder (DB + settings + backups) that can live on a USB stick.
+
+📊 Stats & Insights
+
+Rewatch Tracking → not just progress, but times watched.
+
+Anime Streaks → “You’ve watched at least 1 episode/day for 5 days.” Encouraging but optional.
+
+Custom Time Estimates → right now you calculate ~25 min/episode. Let users set their own default (e.g., “My average viewing is 22 min”).
+
+Charts/Graphs → completion % over time, top genres, average score trends. Local, no telemetry.
+
+🎨 Customization
+
+Themes → light/dark at minimum; optional color themes.
+
+Custom Fields → e.g., “Streaming Service,” “Priority,” “Group Watch With…” stored locally.
+
+Notes Richness → Markdown/formatting support in notes.
+
+📡 Automation & Scrobbling Extras
+
+Multi-Source Scrobbling → allow plugins/adapters (like VLC, mpv, Plex, Netflix, Crunchyroll). Only activated by user choice.
+
+Smart Resume → if scrobbling is interrupted (laptop dies, stream buffers), Mirenku can estimate where you left off.
+
+Conflict Resolver → if local + MAL/AniList disagree, present a simple merge dialog: “Use Local / Use Remote / Merge.”
+
+🤝 Community Without Accounts
+
+Export-to-Share → quick way to package your list as HTML/Markdown for a blog/forum post.
+
+QR Export → generate a QR that links to your JSON/CSV export (friends can import directly).
+
+Recommendation Engine (local) → “Based on your genres + scores, here’s what you might enjoy” — powered by your own data, not external profiling.
+
+🛠️ Quality of Life
+
+Batch Editing → change status/score for multiple entries at once.
+
+Offline Notifications → reminders like “3 new episodes aired this week” (only if you’ve synced with MAL/AniList, otherwise silent).
+
+Keyboard-First Workflow → power shortcuts for adding/updating without touching the mouse.
+
+Smart Filters → e.g., “Show me all anime I rated ≥8 that I haven’t rewatched in 3+ years.”

@@ -3,46 +3,56 @@ MAL OAuth2 client using Protocol Handler (mirenku://)
 Replaces HTTP server with custom protocol for OAuth callbacks
 """
 
+import base64
+import hashlib
+import json
 import logging
 import secrets
-import hashlib
-import base64
-import json
-import webbrowser
 import threading
 import time
-from typing import Optional, Dict, Tuple
-from urllib.parse import urlencode
-import urllib.request
 import urllib.error
-from pathlib import Path
+import urllib.request
+import webbrowser
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, Optional, Tuple
+from urllib.parse import urlencode
+
+from utils.error_sanitizer import ErrorSanitizer
+from utils.protocol_handler import ProtocolHandler
+from utils.security_audit import SecurityAuditLogger
 
 # Import our components
 from utils.token_storage import TokenStorage
-from utils.protocol_handler import ProtocolHandler
-from utils.error_sanitizer import ErrorSanitizer, sanitize_error
 
 logger = logging.getLogger(__name__)
 
 
 class MALOAuth2ProtocolClient:
     """OAuth2 client for MyAnimeList using protocol handler"""
-    
+
     # OAuth2 endpoints
     AUTHORIZE_URL = "https://myanimelist.net/v1/oauth2/authorize"
     TOKEN_URL = "https://myanimelist.net/v1/oauth2/token"
     API_BASE_URL = "https://api.myanimelist.net/v2"
-    
+
     # Protocol-based callback (MAL adds trailing slash)
     REDIRECT_URI = "mirenku://auth/"
-    
+
     # Required scopes
     SCOPES = "anime:read anime:write user:read"
-    
-    def __init__(self, client_id: str, token_storage_path: Path, refresh_buffer_minutes: int = 5,
-                 state_expiry_minutes: int = 5, max_auth_attempts: int = 3, rate_limit_window: int = 60,
-                 pkce_verifier_length: int = 128):
+
+    def __init__(
+        self,
+        client_id: str,
+        token_storage_path: Path,
+        refresh_buffer_minutes: int = 5,
+        state_expiry_minutes: int = 5,
+        max_auth_attempts: int = 3,
+        rate_limit_window: int = 60,
+        pkce_verifier_length: int = 128,
+        enable_audit_logging: bool = False,
+    ):
         """
         Initialize OAuth2 client with protocol handler
 
@@ -54,6 +64,7 @@ class MALOAuth2ProtocolClient:
             max_auth_attempts: Maximum auth attempts before rate limiting (default 3)
             rate_limit_window: Time window in seconds for rate limiting (default 60)
             pkce_verifier_length: Length of PKCE code verifier (default 128, max security)
+            enable_audit_logging: Enable security audit logging (default False)
         """
         self.client_id = client_id
         self.token_storage_path = token_storage_path
@@ -67,7 +78,9 @@ class MALOAuth2ProtocolClient:
         self.state_expiry_minutes = state_expiry_minutes
         self.max_auth_attempts = max_auth_attempts
         self.rate_limit_window = rate_limit_window
-        self.pkce_verifier_length = min(max(43, pkce_verifier_length), 128)  # RFC 7636: 43-128 chars
+        self.pkce_verifier_length = min(
+            max(43, pkce_verifier_length), 128
+        )  # RFC 7636: 43-128 chars
 
         # Initialize token storage with encryption
         self.token_storage = TokenStorage(app_name="Mirenku")
@@ -91,9 +104,15 @@ class MALOAuth2ProtocolClient:
         # Error sanitizer for security
         self.error_sanitizer = ErrorSanitizer()
 
+        # Security audit logging
+        self.audit_logger = None
+        if enable_audit_logging:
+            audit_log_path = token_storage_path.parent / "security_audit.log"
+            self.audit_logger = SecurityAuditLogger(log_path=audit_log_path)
+
         # Load existing tokens if available
         self._load_tokens()
-    
+
     def _generate_pkce_pair(self) -> Tuple[str, str]:
         """
         Generate PKCE code verifier and challenge with maximum entropy
@@ -118,25 +137,29 @@ class MALOAuth2ProtocolClient:
         random_bytes = secrets.token_bytes(bytes_needed)
 
         # Convert to URL-safe base64 (using - and _ instead of + and /)
-        code_verifier = base64.urlsafe_b64encode(random_bytes).decode('utf-8').rstrip('=')
+        code_verifier = base64.urlsafe_b64encode(random_bytes).decode("utf-8").rstrip("=")
 
         # Ensure we have exactly the desired length
         if len(code_verifier) > self.pkce_verifier_length:
-            code_verifier = code_verifier[:self.pkce_verifier_length]
+            code_verifier = code_verifier[: self.pkce_verifier_length]
         elif len(code_verifier) < self.pkce_verifier_length:
             # Add more random characters if needed (shouldn't happen with correct calculation)
-            extra_bytes = secrets.token_bytes((self.pkce_verifier_length - len(code_verifier)) * 3 // 4 + 1)
-            extra_chars = base64.urlsafe_b64encode(extra_bytes).decode('utf-8').rstrip('=')
-            code_verifier += extra_chars[:self.pkce_verifier_length - len(code_verifier)]
+            extra_bytes = secrets.token_bytes(
+                (self.pkce_verifier_length - len(code_verifier)) * 3 // 4 + 1
+            )
+            extra_chars = base64.urlsafe_b64encode(extra_bytes).decode("utf-8").rstrip("=")
+            code_verifier += extra_chars[: self.pkce_verifier_length - len(code_verifier)]
 
         # Generate code challenge using SHA256 (S256 method)
-        challenge_bytes = hashlib.sha256(code_verifier.encode('ascii')).digest()
-        code_challenge = base64.urlsafe_b64encode(challenge_bytes).decode('ascii').rstrip('=')
+        challenge_bytes = hashlib.sha256(code_verifier.encode("ascii")).digest()
+        code_challenge = base64.urlsafe_b64encode(challenge_bytes).decode("ascii").rstrip("=")
 
-        logger.debug(f"Generated PKCE pair: verifier length={len(code_verifier)}, challenge length={len(code_challenge)}")
+        logger.debug(
+            f"Generated PKCE pair: verifier length={len(code_verifier)}, challenge length={len(code_challenge)}"
+        )
 
         return code_verifier, code_challenge
-    
+
     def _generate_state(self) -> str:
         """
         Generate state parameter with timestamp for CSRF protection
@@ -145,14 +168,11 @@ class MALOAuth2ProtocolClient:
         Returns:
             Base64-encoded JSON containing timestamp and nonce
         """
-        state_data = {
-            'timestamp': datetime.now().isoformat(),
-            'nonce': secrets.token_urlsafe(32)
-        }
+        state_data = {"timestamp": datetime.now().isoformat(), "nonce": secrets.token_urlsafe(32)}
 
         # Encode as base64 for URL safety
         state_json = json.dumps(state_data)
-        state = base64.urlsafe_b64encode(state_json.encode()).decode().rstrip('=')
+        state = base64.urlsafe_b64encode(state_json.encode()).decode().rstrip("=")
 
         return state
 
@@ -170,7 +190,7 @@ class MALOAuth2ProtocolClient:
             # Add padding if needed
             padding = 4 - len(state) % 4
             if padding != 4:
-                state += '=' * padding
+                state += "=" * padding
 
             # Decode from base64
             state_json = base64.urlsafe_b64decode(state).decode()
@@ -195,19 +215,21 @@ class MALOAuth2ProtocolClient:
             return False
 
         decoded = self._decode_state(state)
-        if not decoded or 'timestamp' not in decoded:
+        if not decoded or "timestamp" not in decoded:
             return False
 
         try:
             # Parse timestamp
-            timestamp = datetime.fromisoformat(decoded['timestamp'])
+            timestamp = datetime.fromisoformat(decoded["timestamp"])
 
             # Check if expired
             time_elapsed = datetime.now() - timestamp
             expiry_threshold = timedelta(minutes=self.state_expiry_minutes)
 
             if time_elapsed > expiry_threshold:
-                logger.warning(f"State parameter expired ({time_elapsed.total_seconds():.0f} seconds old)")
+                logger.warning(
+                    f"State parameter expired ({time_elapsed.total_seconds():.0f} seconds old)"
+                )
                 return False
 
             return True
@@ -215,39 +237,40 @@ class MALOAuth2ProtocolClient:
         except Exception as e:
             logger.debug(f"Failed to validate state timestamp: {e}")
             return False
-    
+
     def get_authorization_url(self) -> str:
         """
         Generate authorization URL for user consent
-        
+
         Returns:
             Authorization URL to open in browser
         """
         # Generate PKCE pair and state
         self.code_verifier, code_challenge = self._generate_pkce_pair()
         self.state = self._generate_state()
-        
+
         # Save PKCE verifier temporarily for callback
         self._save_temp_auth_state()
-        
+
         # Build authorization URL
         params = {
-            'response_type': 'code',
-            'client_id': self.client_id,
-            'code_challenge': code_challenge,
-            'code_challenge_method': 'S256',
-            'scope': self.SCOPES,
-            'redirect_uri': self.REDIRECT_URI,
-            'state': self.state
+            "response_type": "code",
+            "client_id": self.client_id,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+            "scope": self.SCOPES,
+            "redirect_uri": self.REDIRECT_URI,
+            "state": self.state,
         }
-        
+
         return f"{self.AUTHORIZE_URL}?{urlencode(params)}"
-    
-    def _handle_oauth_callback(self, code: Optional[str], state: Optional[str], 
-                              error: Optional[str]):
+
+    def _handle_oauth_callback(
+        self, code: Optional[str], state: Optional[str], error: Optional[str]
+    ):
         """
         Handle OAuth callback from protocol handler
-        
+
         Args:
             code: Authorization code
             state: State parameter for CSRF validation
@@ -260,12 +283,12 @@ class MALOAuth2ProtocolClient:
             self.auth_error = error
             self.auth_received.set()
             return
-        
+
         # Load saved auth state if not present
         if not self.code_verifier or not self.state:
             logger.info("Loading saved PKCE verifier and state for callback validation")
             self._load_temp_auth_state()
-        
+
         # Validate state timestamp first
         if not self._validate_state_timestamp(state):
             logger.error("State parameter expired")
@@ -279,25 +302,25 @@ class MALOAuth2ProtocolClient:
             self.auth_error = "state_mismatch"
             self.auth_received.set()
             return
-        
+
         if not code:
             logger.error("No authorization code received")
             self.auth_error = "missing_code"
             self.auth_received.set()
             return
-        
+
         # Store code and immediately exchange for tokens
         self.auth_code = code
         logger.info("Exchanging authorization code for tokens...")
-        
+
         # Perform token exchange immediately
         success = self._exchange_code_for_tokens(code)
         if not success:
             self.auth_error = "token_exchange_failed"
-        
+
         # Signal completion
         self.auth_received.set()
-    
+
     def track_auth_attempt(self) -> None:
         """
         Track an authorization attempt for rate limiting
@@ -309,6 +332,10 @@ class MALOAuth2ProtocolClient:
             # Clean old attempts outside the window
             cutoff_time = current_time - self.rate_limit_window
             self._auth_attempts = [t for t in self._auth_attempts if t > cutoff_time]
+
+            # Audit log the attempt
+            if self.audit_logger:
+                self.audit_logger.log_auth_attempt()
 
     def track_failed_auth(self) -> None:
         """
@@ -329,11 +356,11 @@ class MALOAuth2ProtocolClient:
             operation: 'authorize' or 'refresh'
         """
         with self._rate_limit_lock:
-            if operation == 'authorize':
+            if operation == "authorize":
                 self._auth_attempts.clear()
                 self._failed_auth_count = 0
                 self._lockout_until = None
-            elif operation == 'refresh':
+            elif operation == "refresh":
                 self._refresh_attempts.clear()
 
     def is_rate_limited(self, operation: str) -> bool:
@@ -349,7 +376,7 @@ class MALOAuth2ProtocolClient:
         with self._rate_limit_lock:
             current_time = time.time()
 
-            if operation == 'authorize':
+            if operation == "authorize":
                 # Clean old attempts
                 cutoff_time = current_time - self.rate_limit_window
                 self._auth_attempts = [t for t in self._auth_attempts if t > cutoff_time]
@@ -357,10 +384,12 @@ class MALOAuth2ProtocolClient:
                 # Check if we've hit the limit
                 attempt_count = len(self._auth_attempts)
                 if attempt_count >= self.max_auth_attempts:
-                    logger.warning(f"Rate limit active for {operation}: {attempt_count} attempts in last {self.rate_limit_window} seconds")
+                    logger.warning(
+                        f"Rate limit active for {operation}: {attempt_count} attempts in last {self.rate_limit_window} seconds"
+                    )
                     return True
 
-            elif operation == 'refresh':
+            elif operation == "refresh":
                 # Clean old attempts
                 cutoff_time = current_time - self.rate_limit_window
                 self._refresh_attempts = [t for t in self._refresh_attempts if t > cutoff_time]
@@ -368,7 +397,9 @@ class MALOAuth2ProtocolClient:
                 # Check if we've hit the limit (5 refresh attempts)
                 attempt_count = len(self._refresh_attempts)
                 if attempt_count >= 5:
-                    logger.warning(f"Rate limit active for {operation}: {attempt_count} attempts in last {self.rate_limit_window} seconds")
+                    logger.warning(
+                        f"Rate limit active for {operation}: {attempt_count} attempts in last {self.rate_limit_window} seconds"
+                    )
                     return True
 
             return False
@@ -430,8 +461,10 @@ class MALOAuth2ProtocolClient:
             logger.error("Cannot authorize: Account is locked out due to failed attempts")
             return False
 
-        if self.is_rate_limited('authorize'):
-            logger.warning("Rate limit exceeded for authorization. Please wait before trying again.")
+        if self.is_rate_limited("authorize"):
+            logger.warning(
+                "Rate limit exceeded for authorization. Please wait before trying again."
+            )
             return False
 
         # Track this attempt
@@ -440,22 +473,22 @@ class MALOAuth2ProtocolClient:
             # Setup protocol handler
             protocol_handler = ProtocolHandler()
             protocol_handler.register_oauth_handler(self._handle_oauth_callback)
-            
+
             # Get authorization URL
             auth_url = self.get_authorization_url()
             logger.info("Opening browser for MAL authorization...")
             logger.debug(f"Auth URL: {auth_url[:50]}...")  # Log partial URL
-            
+
             # Reset event and error
             self.auth_received.clear()
             self.auth_code = None
             self.auth_error = None
-            
+
             # Open browser
             if not webbrowser.open(auth_url):
                 logger.error("Failed to open browser")
                 return False
-            
+
             # Wait for callback
             logger.info("Waiting for authorization callback via protocol handler...")
             logger.info(f"Waiting for up to {timeout} seconds for callback...")
@@ -463,29 +496,28 @@ class MALOAuth2ProtocolClient:
                 logger.error(f"Authorization timeout after {timeout} seconds")
                 logger.error("No callback received from browser")
                 return False
-            
+
             # Check for errors
             if self.auth_error:
                 logger.error(f"Authorization failed: {self.auth_error}")
                 return False
-            
+
             if not self.auth_code:
                 logger.error("No authorization code received")
                 return False
-            
+
             # Token exchange already happened in callback handler
             # Just check if we have valid tokens
             if self.access_token and self.refresh_token:
                 logger.info("Authorization and token exchange completed successfully")
                 # Reset rate limiting on success
-                self.reset_rate_limit('authorize')
+                self.reset_rate_limit("authorize")
                 return True
-            else:
-                logger.error("Token exchange failed during callback processing")
-                # Track failed auth for lockout
-                self.track_failed_auth()
-                return False
-            
+            logger.error("Token exchange failed during callback processing")
+            # Track failed auth for lockout
+            self.track_failed_auth()
+            return False
+
         except Exception as e:
             # Sanitize exception message
             sanitized_error = self.error_sanitizer.sanitize(str(e))
@@ -493,14 +525,14 @@ class MALOAuth2ProtocolClient:
             # Track failed auth for lockout
             self.track_failed_auth()
             return False
-    
+
     def _exchange_code_for_tokens(self, auth_code: str) -> bool:
         """
         Exchange authorization code for access and refresh tokens
-        
+
         Args:
             auth_code: Authorization code from callback
-            
+
         Returns:
             True if successful
         """
@@ -509,83 +541,86 @@ class MALOAuth2ProtocolClient:
             if not self.code_verifier:
                 logger.info("Loading saved PKCE verifier for token exchange")
                 self._load_temp_auth_state()
-            
+
             if not self.code_verifier:
                 logger.error("No PKCE code verifier available for token exchange")
                 return False
-            
+
             # Log important details for debugging
             logger.info("Token exchange attempt:")
             logger.info(f"  - Auth code (first 10 chars): {auth_code[:10]}...")
             logger.info(f"  - Code verifier (first 10 chars): {self.code_verifier[:10]}...")
-            logger.info(f"  - Client ID: {self.client_id[:8]}..." if len(self.client_id) > 8 else f"  - Client ID: {self.client_id}")
+            logger.info(
+                f"  - Client ID: {self.client_id[:8]}..."
+                if len(self.client_id) > 8
+                else f"  - Client ID: {self.client_id}"
+            )
             logger.info(f"  - Redirect URI: {self.REDIRECT_URI}")
-            
+
             # Prepare token request
             data = {
-                'client_id': self.client_id,
-                'grant_type': 'authorization_code',
-                'code': auth_code,
-                'redirect_uri': self.REDIRECT_URI,
-                'code_verifier': self.code_verifier
+                "client_id": self.client_id,
+                "grant_type": "authorization_code",
+                "code": auth_code,
+                "redirect_uri": self.REDIRECT_URI,
+                "code_verifier": self.code_verifier,
             }
-            
+
             # Make token request
             request = urllib.request.Request(
                 self.TOKEN_URL,
-                data=urlencode(data).encode('utf-8'),
-                headers={'Content-Type': 'application/x-www-form-urlencoded'}
+                data=urlencode(data).encode("utf-8"),
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
-            
+
             with urllib.request.urlopen(request) as response:
                 if response.status == 200:
-                    token_data = json.loads(response.read().decode('utf-8'))
-                    
+                    token_data = json.loads(response.read().decode("utf-8"))
+
                     # Store tokens
-                    self.access_token = token_data['access_token']
-                    self.refresh_token = token_data['refresh_token']
-                    expires_in = token_data.get('expires_in', 2678400)  # 31 days default
+                    self.access_token = token_data["access_token"]
+                    self.refresh_token = token_data["refresh_token"]
+                    expires_in = token_data.get("expires_in", 2678400)  # 31 days default
                     self.token_expiry = datetime.now() + timedelta(seconds=expires_in)
-                    
+
                     # Save tokens with encryption
                     self._save_tokens()
-                    
+
                     logger.info("Successfully obtained access token")
-                    
+
                     # Clear temp auth state after successful exchange
                     self._clear_temp_auth_state()
-                    
+
                     return True
-                else:
-                    logger.error(f"Token exchange failed with status {response.status}")
-                    return False
-                    
+                logger.error(f"Token exchange failed with status {response.status}")
+                return False
+
         except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8')
+            error_body = e.read().decode("utf-8")
             logger.error(f"Token exchange HTTP error {e.code}")
 
             try:
                 error_data = json.loads(error_body)
-                error_msg = error_data.get('error', 'Unknown')
-                error_desc = error_data.get('error_description', 'No description')
+                error_msg = error_data.get("error", "Unknown")
+                error_desc = error_data.get("error_description", "No description")
                 # Sanitize error description before logging
                 sanitized_desc = self.error_sanitizer.sanitize(error_desc)
                 logger.error(f"MAL Error: {error_msg} - {sanitized_desc}")
-                
+
                 # Provide helpful error message for common issues
-                if error_msg == 'invalid_grant':
+                if error_msg == "invalid_grant":
                     logger.error("Authorization code may have expired or been used already.")
                     logger.error("Please try connecting to MAL again.")
             except:
                 pass
-            
+
             return False
         except Exception as e:
             # Sanitize exception message
             sanitized_error = self.error_sanitizer.sanitize(str(e))
             logger.error(f"Token exchange failed: {sanitized_error}")
             return False
-    
+
     def refresh_access_token(self) -> bool:
         """
         Refresh access token using refresh token with concurrency protection
@@ -594,8 +629,10 @@ class MALOAuth2ProtocolClient:
             True if successful
         """
         # Check rate limiting
-        if self.is_rate_limited('refresh'):
-            logger.warning("Rate limit exceeded for token refresh. Please wait before trying again.")
+        if self.is_rate_limited("refresh"):
+            logger.warning(
+                "Rate limit exceeded for token refresh. Please wait before trying again."
+            )
             return False
 
         # Track refresh attempt
@@ -618,7 +655,7 @@ class MALOAuth2ProtocolClient:
             result = self._do_refresh_access_token()
             if result:
                 # Reset rate limit on success
-                self.reset_rate_limit('refresh')
+                self.reset_rate_limit("refresh")
             return result
         finally:
             with self._refresh_lock:
@@ -638,26 +675,26 @@ class MALOAuth2ProtocolClient:
         try:
             # Prepare refresh request
             data = {
-                'client_id': self.client_id,
-                'grant_type': 'refresh_token',
-                'refresh_token': self.refresh_token
+                "client_id": self.client_id,
+                "grant_type": "refresh_token",
+                "refresh_token": self.refresh_token,
             }
 
             # Make refresh request
             request = urllib.request.Request(
                 self.TOKEN_URL,
-                data=urlencode(data).encode('utf-8'),
-                headers={'Content-Type': 'application/x-www-form-urlencoded'}
+                data=urlencode(data).encode("utf-8"),
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
             with urllib.request.urlopen(request) as response:
                 if response.status == 200:
-                    token_data = json.loads(response.read().decode('utf-8'))
+                    token_data = json.loads(response.read().decode("utf-8"))
 
                     # Update tokens
-                    self.access_token = token_data['access_token']
-                    self.refresh_token = token_data['refresh_token']
-                    expires_in = token_data.get('expires_in', 2678400)
+                    self.access_token = token_data["access_token"]
+                    self.refresh_token = token_data["refresh_token"]
+                    expires_in = token_data.get("expires_in", 2678400)
                     self.token_expiry = datetime.now() + timedelta(seconds=expires_in)
 
                     # Save tokens with encryption
@@ -665,15 +702,49 @@ class MALOAuth2ProtocolClient:
 
                     logger.info("Successfully refreshed access token")
                     logger.info(f"New token expires at: {self.token_expiry}")
+
+                    # Audit log successful refresh
+                    if self.audit_logger:
+                        old_expiry = (
+                            (datetime.now() - timedelta(seconds=1)).isoformat()
+                            if not hasattr(self, "_old_token_expiry")
+                            else self._old_token_expiry
+                        )
+                        self.audit_logger.log_token_refresh(
+                            success=True,
+                            reason="expiry",
+                            old_expiry=str(old_expiry),
+                            new_expiry=str(self.token_expiry),
+                        )
+
                     return True
-                else:
-                    logger.error(f"Token refresh failed with status {response.status}")
-                    return False
+                logger.error(f"Token refresh failed with status {response.status}")
+
+                # Audit log failed refresh
+                if self.audit_logger:
+                    self.audit_logger.log_token_refresh(
+                        success=False,
+                        reason=f"HTTP {response.status}",
+                        old_expiry=str(self.token_expiry) if self.token_expiry else "",
+                        new_expiry="",
+                    )
+
+                return False
 
         except Exception as e:
             # Sanitize exception message
             sanitized_error = self.error_sanitizer.sanitize(str(e))
             logger.error(f"Token refresh failed: {sanitized_error}")
+
+            # Audit log failed refresh due to exception
+            if self.audit_logger:
+                self.audit_logger.log_token_refresh(
+                    success=False,
+                    reason=sanitized_error,
+                    old_expiry=str(self.token_expiry) if self.token_expiry else "",
+                    new_expiry="",
+                )
+
             return False
 
     def refresh_access_token_with_retry(self, max_retries: int = 3) -> bool:
@@ -689,7 +760,7 @@ class MALOAuth2ProtocolClient:
         for attempt in range(max_retries):
             if attempt > 0:
                 logger.info(f"Retry attempt {attempt} of {max_retries}")
-                time.sleep(2 ** attempt)  # Exponential backoff
+                time.sleep(2**attempt)  # Exponential backoff
 
             try:
                 if self.refresh_access_token():
@@ -701,7 +772,7 @@ class MALOAuth2ProtocolClient:
                     return False
 
         return False
-    
+
     def is_authenticated(self) -> bool:
         """
         Check if client is authenticated
@@ -718,11 +789,10 @@ class MALOAuth2ProtocolClient:
             # Try to refresh
             if self.refresh_access_token():
                 return True
-            else:
-                return False
+            return False
 
         return True
-    
+
     def _is_token_expired(self) -> bool:
         """Check if access token is expired"""
         if not self.token_expiry:
@@ -765,8 +835,10 @@ class MALOAuth2ProtocolClient:
         elif minutes_until_expiry <= 3:
             logger.warning(f"Token expires in {minutes_until_expiry:.1f} minutes")
         elif minutes_until_expiry <= 5:
-            logger.info(f"Token expires in {minutes_until_expiry:.1f} minutes (within refresh buffer)")
-    
+            logger.info(
+                f"Token expires in {minutes_until_expiry:.1f} minutes (within refresh buffer)"
+            )
+
     def get_access_token(self) -> Optional[str]:
         """
         Get current access token, refreshing if needed
@@ -784,57 +856,59 @@ class MALOAuth2ProtocolClient:
                 return None
 
         return self.access_token
-    
+
     def _save_tokens(self):
         """Save tokens using encrypted storage"""
         try:
             # Create token data
             token_data = {
-                'access_token': self.access_token,
-                'refresh_token': self.refresh_token,
-                'token_expiry': self.token_expiry.isoformat() if self.token_expiry else None,
-                'client_id': self.client_id
+                "access_token": self.access_token,
+                "refresh_token": self.refresh_token,
+                "token_expiry": self.token_expiry.isoformat() if self.token_expiry else None,
+                "client_id": self.client_id,
             }
-            
+
             # Use TokenStorage for encryption
             if self.token_storage.save_tokens(token_data):
                 logger.info("Tokens saved securely")
             else:
                 logger.error("Failed to save tokens securely")
-            
+
         except Exception as e:
             logger.error(f"Failed to save tokens: {e}")
-    
+
     def _load_tokens(self):
         """Load tokens from encrypted storage"""
         try:
             # Use TokenStorage for decryption
             token_data = self.token_storage.load_tokens()
-            
+
             if not token_data:
                 return
-            
+
             # Verify client ID matches
-            stored_client_id = token_data.get('client_id')
+            stored_client_id = token_data.get("client_id")
             if stored_client_id and stored_client_id != self.client_id:
-                logger.warning(f"Client ID mismatch in stored tokens (stored: {stored_client_id[:8]}..., current: {self.client_id[:8]}...). Clearing old tokens.")
+                logger.warning(
+                    f"Client ID mismatch in stored tokens (stored: {stored_client_id[:8]}..., current: {self.client_id[:8]}...). Clearing old tokens."
+                )
                 # Clear invalid tokens
                 self.token_storage.delete_tokens()
                 return
-            
-            self.access_token = token_data.get('access_token')
-            self.refresh_token = token_data.get('refresh_token')
-            
-            if token_data.get('token_expiry'):
+
+            self.access_token = token_data.get("access_token")
+            self.refresh_token = token_data.get("refresh_token")
+
+            if token_data.get("token_expiry"):
                 try:
-                    self.token_expiry = datetime.fromisoformat(token_data['token_expiry'])
+                    self.token_expiry = datetime.fromisoformat(token_data["token_expiry"])
                 except (ValueError, TypeError):
                     logger.warning("Invalid token expiry format, ignoring")
                     self.token_expiry = None
-            
+
             if self.access_token and self.refresh_token:
                 logger.info("Tokens loaded from secure storage")
-            
+
         except Exception as e:
             logger.error(f"Failed to load tokens: {e}")
             # Clear potentially corrupted tokens
@@ -842,7 +916,7 @@ class MALOAuth2ProtocolClient:
                 self.token_storage.delete_tokens()
             except:
                 pass
-    
+
     def _sanitize_error_response(self, error_response: Dict) -> Dict:
         """
         Sanitize an OAuth error response dictionary
@@ -872,60 +946,59 @@ class MALOAuth2ProtocolClient:
         self.access_token = None
         self.refresh_token = None
         self.token_expiry = None
-        
+
         # Clear from secure storage
         try:
             self.token_storage.save_tokens(None)
         except:
             pass
-        
+
         logger.info("Logged out and tokens cleared")
-    
-    def make_api_request(self, endpoint: str, method: str = "GET", 
-                        data: Optional[Dict] = None) -> Optional[Dict]:
+
+    def make_api_request(
+        self, endpoint: str, method: str = "GET", data: Optional[Dict] = None
+    ) -> Optional[Dict]:
         """
         Make authenticated API request to MAL
-        
+
         Args:
             endpoint: API endpoint (relative to base URL)
             method: HTTP method
             data: Request data for POST/PATCH
-            
+
         Returns:
             Response data or None on error
         """
         if not self.is_authenticated():
             logger.error("Not authenticated")
             return None
-        
+
         try:
             url = f"{self.API_BASE_URL}{endpoint}"
-            
+
             # Prepare request
             if data and method in ["POST", "PATCH"]:
-                request_data = urlencode(data).encode('utf-8')
+                request_data = urlencode(data).encode("utf-8")
                 request = urllib.request.Request(
                     url,
                     data=request_data,
                     method=method,
                     headers={
-                        'Authorization': f'Bearer {self.access_token}',
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    }
+                        "Authorization": f"Bearer {self.access_token}",
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
                 )
             else:
                 request = urllib.request.Request(
-                    url,
-                    headers={'Authorization': f'Bearer {self.access_token}'}
+                    url, headers={"Authorization": f"Bearer {self.access_token}"}
                 )
-            
+
             with urllib.request.urlopen(request) as response:
                 if response.status in [200, 201]:
-                    return json.loads(response.read().decode('utf-8'))
-                else:
-                    logger.error(f"API request failed with status {response.status}")
-                    return None
-                    
+                    return json.loads(response.read().decode("utf-8"))
+                logger.error(f"API request failed with status {response.status}")
+                return None
+
         except urllib.error.HTTPError as e:
             if e.code == 401:
                 # Token expired, try refresh
@@ -937,63 +1010,65 @@ class MALOAuth2ProtocolClient:
         except Exception as e:
             logger.error(f"API request failed: {e}")
             return None
-    
+
     def _save_temp_auth_state(self):
         """Save temporary auth state (PKCE verifier and state) for callback"""
         try:
             temp_data = {
-                'code_verifier': self.code_verifier,
-                'state': self.state,
-                'client_id': self.client_id,
-                'timestamp': datetime.now().isoformat()
+                "code_verifier": self.code_verifier,
+                "state": self.state,
+                "client_id": self.client_id,
+                "timestamp": datetime.now().isoformat(),
             }
-            
+
             # Save to a temporary file in the config directory
-            temp_file = self.token_storage_path.parent / '.mal_auth_temp.json'
-            with open(temp_file, 'w') as f:
+            temp_file = self.token_storage_path.parent / ".mal_auth_temp.json"
+            with open(temp_file, "w") as f:
                 json.dump(temp_data, f)
-            
+
             logger.debug(f"Saved temp auth state to {temp_file}")
-            
+
         except Exception as e:
             logger.error(f"Failed to save temp auth state: {e}")
-    
+
     def _load_temp_auth_state(self):
         """Load temporary auth state (PKCE verifier and state) for callback"""
         try:
-            temp_file = self.token_storage_path.parent / '.mal_auth_temp.json'
-            
+            temp_file = self.token_storage_path.parent / ".mal_auth_temp.json"
+
             if not temp_file.exists():
                 logger.warning("No temp auth state file found")
                 return
-            
-            with open(temp_file, 'r') as f:
+
+            with open(temp_file) as f:
                 temp_data = json.load(f)
-            
+
             # Check if data is recent (within 10 minutes)
-            timestamp = datetime.fromisoformat(temp_data.get('timestamp', ''))
+            timestamp = datetime.fromisoformat(temp_data.get("timestamp", ""))
             if datetime.now() - timestamp > timedelta(minutes=10):
                 logger.warning("Temp auth state is too old, ignoring")
                 temp_file.unlink()  # Delete old file
                 return
-            
+
             # Verify client ID matches
-            if temp_data.get('client_id') != self.client_id:
+            if temp_data.get("client_id") != self.client_id:
                 logger.warning("Client ID mismatch in temp auth state")
                 return
-            
+
             # Load the state
-            self.code_verifier = temp_data.get('code_verifier')
-            self.state = temp_data.get('state')
-            
-            logger.info(f"Loaded temp auth state (verifier: {bool(self.code_verifier)}, state: {bool(self.state)})")
-            
+            self.code_verifier = temp_data.get("code_verifier")
+            self.state = temp_data.get("state")
+
+            logger.info(
+                f"Loaded temp auth state (verifier: {bool(self.code_verifier)}, state: {bool(self.state)})"
+            )
+
             # Delete temp file after loading
             temp_file.unlink()
-            
+
         except Exception as e:
             logger.error(f"Failed to load temp auth state: {e}")
-    
+
     def _clear_temp_auth_state(self):
         """Clear temporary auth state file and memory"""
         try:
@@ -1002,7 +1077,7 @@ class MALOAuth2ProtocolClient:
             self.code_verifier = None
 
             # Clear from file
-            temp_file = self.token_storage_path.parent / '.mal_auth_temp.json'
+            temp_file = self.token_storage_path.parent / ".mal_auth_temp.json"
             if temp_file.exists():
                 temp_file.unlink()
                 logger.debug("Cleared temp auth state")
@@ -1014,7 +1089,7 @@ def handle_protocol_url(url: str):
     """
     Global handler for protocol URLs
     Should be called from main application when protocol URL is received
-    
+
     Args:
         url: Protocol URL (mirenku://...)
     """

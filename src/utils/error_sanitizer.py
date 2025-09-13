@@ -4,10 +4,10 @@ Ensures sensitive data is never exposed in logs or error messages
 Following The Mirenku Way: Clear, honest errors without exposing secrets
 """
 
-import re
 import logging
-from typing import Dict, Any, Optional, List, Tuple
+import re
 from functools import lru_cache
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class ErrorSanitizer:
@@ -18,72 +18,81 @@ class ErrorSanitizer:
         # Patterns for sensitive data (pattern, replacement)
         self.patterns: List[Tuple[re.Pattern, str]] = [
             # Bearer tokens (JWT or other)
-            (re.compile(r'Bearer\s+[A-Za-z0-9\-_=]+\.?[A-Za-z0-9\-_=]*\.?[A-Za-z0-9\-_=]*'),
-             'Bearer [REDACTED]'),
-
+            (
+                re.compile(r"Bearer\s+[A-Za-z0-9\-_=]+\.?[A-Za-z0-9\-_=]*\.?[A-Za-z0-9\-_=]*"),
+                "Bearer [REDACTED]",
+            ),
             # Generic tokens (base64-like strings > 20 chars)
-            (re.compile(r'\b(token|access_token|refresh_token)["\']?\s*[:=]\s*["\']?([A-Za-z0-9\-_=]{20,})["\']?', re.IGNORECASE),
-             r'\1=[REDACTED]'),
-
+            (
+                re.compile(
+                    r'\b(token|access_token|refresh_token)["\']?\s*[:=]\s*["\']?([A-Za-z0-9\-_=]{20,})["\']?',
+                    re.IGNORECASE,
+                ),
+                r"\1=[REDACTED]",
+            ),
             # Authorization codes
-            (re.compile(r'\b(code|authorization_code)["\']?\s*[:=]\s*["\']?([A-Za-z0-9\-_]{10,})["\']?', re.IGNORECASE),
-             r'\1=[REDACTED]'),
-
+            (
+                re.compile(
+                    r'\b(code|authorization_code)["\']?\s*[:=]\s*["\']?([A-Za-z0-9\-_]{10,})["\']?',
+                    re.IGNORECASE,
+                ),
+                r"\1=[REDACTED]",
+            ),
             # Authorization code in sentence format
-            (re.compile(r'authorization code:\s*([A-Za-z0-9\-_]{10,})', re.IGNORECASE),
-             r'authorization code: [CODE REDACTED]'),
-
+            (
+                re.compile(r"authorization code:\s*([A-Za-z0-9\-_]{10,})", re.IGNORECASE),
+                r"authorization code: [CODE REDACTED]",
+            ),
             # Client secrets
-            (re.compile(r'\b(client_secret|secret)["\']?\s*[:=]\s*["\']?([A-Za-z0-9\-_]+)["\']?', re.IGNORECASE),
-             r'\1=[REDACTED]'),
-
+            (
+                re.compile(
+                    r'\b(client_secret|secret)["\']?\s*[:=]\s*["\']?([A-Za-z0-9\-_]+)["\']?',
+                    re.IGNORECASE,
+                ),
+                r"\1=[REDACTED]",
+            ),
             # Client IDs (partial masking) - must come before shorter token patterns
-            (re.compile(r'\b(client_id)["\']?\s*[:=]\s*["\']?([A-Za-z0-9\-_]{4})([A-Za-z0-9\-_]{4,})["\']?', re.IGNORECASE),
-             r'\1=\2...***'),
-
+            (
+                re.compile(
+                    r'\b(client_id)["\']?\s*[:=]\s*["\']?([A-Za-z0-9\-_]{4})([A-Za-z0-9\-_]{4,})["\']?',
+                    re.IGNORECASE,
+                ),
+                r"\1=\2...***",
+            ),
             # URLs with query parameters containing secrets
-            (re.compile(r'(client_secret|access_token|refresh_token|code)=([^&\s]+)'),
-             r'\1=[REDACTED]'),
-
+            (
+                re.compile(r"(client_secret|access_token|refresh_token|code)=([^&\s]+)"),
+                r"\1=[REDACTED]",
+            ),
             # File paths with usernames (Windows)
-            (re.compile(r'C:\\Users\\([^\\]+)\\'),
-             r'C:\\Users\\[USER]\\'),
-
+            (re.compile(r"C:\\Users\\([^\\]+)\\"), r"C:\\Users\\[USER]\\"),
             # File paths with usernames (Unix-like)
-            (re.compile(r'/home/([^/]+)/'),
-             r'/home/[USER]/'),
-
+            (re.compile(r"/home/([^/]+)/"), r"/home/[USER]/"),
             # MAL-specific tokens
-            (re.compile(r'mal_token_[A-Za-z0-9]+'),
-             'mal_token_[REDACTED]'),
-
+            (re.compile(r"mal_token_[A-Za-z0-9]+"), "mal_token_[REDACTED]"),
             # Refresh tokens specifically
-            (re.compile(r'refresh_token_[A-Za-z0-9]+'),
-             'refresh_token_[REDACTED]'),
-
+            (re.compile(r"refresh_token_[A-Za-z0-9]+"), "refresh_token_[REDACTED]"),
             # Base64 encoded JWT tokens
-            (re.compile(r'eyJ[A-Za-z0-9\-_=]+\.?[A-Za-z0-9\-_=]*\.?[A-Za-z0-9\-_=]*'),
-             '[TOKEN REDACTED]'),
-
+            (
+                re.compile(r"eyJ[A-Za-z0-9\-_=]+\.?[A-Za-z0-9\-_=]*\.?[A-Za-z0-9\-_=]*"),
+                "[TOKEN REDACTED]",
+            ),
             # JSON tokens specifically
-            (re.compile(r'"(access_token|refresh_token)"\s*:\s*"([^"]+)"', re.IGNORECASE),
-             r'"\1": "[REDACTED]"'),
-
+            (
+                re.compile(r'"(access_token|refresh_token)"\s*:\s*"([^"]+)"', re.IGNORECASE),
+                r'"\1": "[REDACTED]"',
+            ),
             # Quoted tokens in error messages (including refresh_token patterns)
-            (re.compile(r"'(refresh_[A-Za-z0-9\-_]+)'", re.IGNORECASE),
-             r"'[REDACTED]'"),
-            (re.compile(r"'([A-Za-z0-9\-_]{10,})'", re.IGNORECASE),
-             r"'[REDACTED]'"),
-
+            (re.compile(r"'(refresh_[A-Za-z0-9\-_]+)'", re.IGNORECASE), r"'[REDACTED]'"),
+            (re.compile(r"'([A-Za-z0-9\-_]{10,})'", re.IGNORECASE), r"'[REDACTED]'"),
             # Generic long alphanumeric strings that might be tokens (>40 chars to avoid false positives)
-            (re.compile(r'\b[A-Za-z0-9]{40,}\b'),
-             '[POSSIBLE TOKEN REDACTED]'),
+            (re.compile(r"\b[A-Za-z0-9]{40,}\b"), "[POSSIBLE TOKEN REDACTED]"),
         ]
 
         # Patterns to preserve (these override sanitization)
         self.preserve_patterns = [
-            re.compile(r'HTTP\s+\d{3}'),  # HTTP status codes
-            re.compile(r'\d+\s+seconds?'),  # Time durations
+            re.compile(r"HTTP\s+\d{3}"),  # HTTP status codes
+            re.compile(r"\d+\s+seconds?"),  # Time durations
             re.compile(r'expires_in["\']?\s*[:=]\s*\d+'),  # Token expiry times
         ]
 
@@ -123,14 +132,20 @@ class ErrorSanitizer:
 
         sanitized = {}
         sensitive_keys = {
-            'access_token', 'refresh_token', 'token',
-            'client_secret', 'secret', 'password',
-            'authorization', 'api_key', 'private_key'
+            "access_token",
+            "refresh_token",
+            "token",
+            "client_secret",
+            "secret",
+            "password",
+            "authorization",
+            "api_key",
+            "private_key",
         }
 
         for key, value in data.items():
             if any(sensitive in key.lower() for sensitive in sensitive_keys):
-                sanitized[key] = '[REDACTED]'
+                sanitized[key] = "[REDACTED]"
             elif isinstance(value, str):
                 # Sanitize string values that might contain secrets
                 if len(value) > 10:  # Only sanitize non-trivial strings
@@ -190,9 +205,16 @@ class ErrorSanitizer:
         """
         # Quick checks for common sensitive patterns
         sensitive_indicators = [
-            'token', 'secret', 'password', 'Bearer',
-            'client_id', 'client_secret', 'refresh_token',
-            'access_token', 'authorization', 'api_key'
+            "token",
+            "secret",
+            "password",
+            "Bearer",
+            "client_id",
+            "client_secret",
+            "refresh_token",
+            "access_token",
+            "authorization",
+            "api_key",
         ]
 
         text_lower = text.lower()
@@ -268,9 +290,7 @@ def setup_sanitized_logging(logger_name: Optional[str] = None):
 
     # Add sanitized handler
     handler = _global_sanitizer.create_sanitized_handler()
-    handler.setFormatter(logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    ))
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
     logger.addHandler(handler)
 
     return logger
