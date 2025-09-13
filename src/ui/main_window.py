@@ -866,7 +866,7 @@ Added This Week: {stats.get('added_this_week', 0)}"""
         """Open MAL search dialog"""
         from ui.mal_search_dialog import MALSearchDialog
 
-        MALSearchDialog(self.root, self.mal_service, self.service)
+        MALSearchDialog(self.root, self.mal_service, self.service, self.refresh_list)
 
     def import_mal_user(self):
         """Import anime list from MAL user"""
@@ -998,7 +998,7 @@ Added This Week: {stats.get('added_this_week', 0)}"""
             # Already connected, offer to disconnect
             response = messagebox.askyesno(
                 "MAL Connected",
-                "You are already connected to MyAnimeList.\n\n" "Would you like to disconnect?",
+                "You are already connected to MyAnimeList.\n\nWould you like to disconnect?",
             )
             if response:
                 self.mal_auth_manager.oauth_client.logout()
@@ -1075,7 +1075,7 @@ Added This Week: {stats.get('added_this_week', 0)}"""
                 username = user_info.get("name", "Unknown")
                 messagebox.showinfo(
                     "Connected!",
-                    f"Successfully connected to MyAnimeList!\n\n" f"Logged in as: {username}",
+                    f"Successfully connected to MyAnimeList!\n\nLogged in as: {username}",
                 )
         except:
             pass

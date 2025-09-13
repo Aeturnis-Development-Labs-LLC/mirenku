@@ -13,17 +13,19 @@ logger = logging.getLogger(__name__)
 class MALSearchDialog:
     """Dialog for searching and importing anime from MyAnimeList"""
 
-    def __init__(self, parent, mal_service, anime_service):
+    def __init__(self, parent, mal_service, anime_service, refresh_callback=None):
         """Initialize MAL search dialog
 
         Args:
             parent: Parent window
             mal_service: MAL API service instance
             anime_service: Local anime service instance
+            refresh_callback: Optional callback to refresh parent list
         """
         self.parent = parent
         self.mal_service = mal_service
         self.anime_service = anime_service
+        self.refresh_callback = refresh_callback
         self.selected_anime = None
         self.search_results = []
 
@@ -205,7 +207,7 @@ class MALSearchDialog:
             self.status_label.config(text="Network error. Check connection.")
             messagebox.showerror(
                 "Network Error",
-                "Could not connect to MyAnimeList.\n\n" "Please check your internet connection.",
+                "Could not connect to MyAnimeList.\n\nPlease check your internet connection.",
             )
         elif "not found" in error_msg.lower():
             self.status_label.config(text="No results found")
@@ -213,7 +215,7 @@ class MALSearchDialog:
             self.status_label.config(text="MAL server error. Try again later.")
             messagebox.showerror(
                 "Server Error",
-                "MyAnimeList servers are experiencing issues.\n\n" "Please try again later.",
+                "MyAnimeList servers are experiencing issues.\n\nPlease try again later.",
             )
         else:
             self.status_label.config(text=f"Search failed: {error_msg}")
@@ -373,19 +375,21 @@ class MALSearchDialog:
             if updates:
                 success, message = self.anime_service.update_anime(anime.id, **updates)
                 if success:
-                    # Download image if needed
+                    # Download image synchronously if needed
                     if image_url:
                         from services.image_service import ImageService
 
                         image_cache_dir = Path.home() / ".animetracker" / "image_cache"
                         image_service = ImageService(image_cache_dir)
-                        image_service.queue_download(
-                            image_url, image_cache_dir / f"mal_{mal_id}.jpg"
-                        )
+                        # Use synchronous download for immediate availability
+                        image_service.download_image_sync(image_url, mal_id)
 
                     messagebox.showinfo(
                         "Update Success", f"Successfully updated '{title}' with MAL data"
                     )
+                    # Refresh parent list if callback provided
+                    if self.refresh_callback:
+                        self.refresh_callback()
                     self.close()
                 else:
                     messagebox.showerror("Update Failed", f"Failed to update: {message}")
@@ -417,18 +421,22 @@ class MALSearchDialog:
         )
 
         if success:
-            # Download cover image in background
+            # Download cover image synchronously for immediate display
             if image_url:
                 try:
                     from services.image_service import ImageService
 
                     image_cache_dir = Path.home() / ".animetracker" / "image_cache"
                     image_service = ImageService(image_cache_dir)
-                    image_service.queue_download(image_url, image_cache_dir / f"mal_{mal_id}.jpg")
+                    # Use synchronous download for immediate availability
+                    image_service.download_image_sync(image_url, mal_id)
                 except Exception as e:
-                    logger.warning(f"Failed to queue image download: {e}")
+                    logger.warning(f"Failed to download image: {e}")
 
             messagebox.showinfo("Import Success", f"Successfully imported '{title}'")
+            # Refresh parent list if callback provided
+            if self.refresh_callback:
+                self.refresh_callback()
             self.close()
         else:
             messagebox.showerror("Import Failed", f"Failed to import: {message}")

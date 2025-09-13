@@ -242,9 +242,26 @@ class AnimeDetailDialog:
     def load_image(self):
         """Load and display cover image"""
         try:
-            # Get image path (downloads if needed)
-            image_path = self.image_service.get_image_path(self.anime.image_url, self.anime.mal_id)
+            # Define callback for when image downloads
+            def on_image_downloaded(path):
+                # Schedule UI update in main thread
+                self.dialog.after(0, lambda: self._display_image(path))
 
+            # Get image path (downloads if needed with callback)
+            image_path = self.image_service.get_image_path(
+                self.anime.image_url, self.anime.mal_id, callback=on_image_downloaded
+            )
+
+            # Display the image (placeholder or actual)
+            self._display_image(image_path)
+
+        except Exception as e:
+            logger.error(f"Failed to load image: {e}")
+            self.image_label.config(text="Failed to load image")
+
+    def _display_image(self, image_path):
+        """Display an image from path"""
+        try:
             if image_path and image_path.exists():
                 # Load and resize image
                 img = Image.open(image_path)
@@ -260,10 +277,8 @@ class AnimeDetailDialog:
             else:
                 # Show placeholder text
                 self.image_label.config(text="No Image Available")
-
         except Exception as e:
-            logger.error(f"Failed to load image: {e}")
-            self.image_label.config(text="Failed to load image")
+            logger.error(f"Failed to display image: {e}")
 
     def refresh_image(self):
         """Refresh cover image from MAL"""

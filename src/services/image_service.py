@@ -43,12 +43,15 @@ class ImageService:
             img.save(placeholder_path)
             logger.info("Created placeholder image")
 
-    def get_image_path(self, image_url: Optional[str], mal_id: Optional[int] = None) -> Path:
+    def get_image_path(
+        self, image_url: Optional[str], mal_id: Optional[int] = None, callback=None
+    ) -> Path:
         """Get local path for an image, downloading if necessary
 
         Args:
             image_url: URL of the image
             mal_id: MAL ID for naming
+            callback: Optional callback to call when download completes
 
         Returns:
             Path to local image file
@@ -60,7 +63,7 @@ class ImageService:
         if mal_id:
             filename = f"mal_{mal_id}.jpg"
         else:
-            url_hash = hashlib.md5(image_url.encode()).hexdigest()[:8]
+            url_hash = hashlib.md5(image_url.encode(), usedforsecurity=False).hexdigest()[:8]
             filename = f"cover_{url_hash}.jpg"
 
         image_path = self.cache_dir / filename
@@ -69,22 +72,25 @@ class ImageService:
         if image_path.exists():
             return image_path
 
-        # Queue for download
-        self.queue_download(image_url, image_path)
+        # Queue for download with callback
+        self.queue_download(image_url, image_path, callback)
 
         # Return placeholder while downloading
         return self.cache_dir / "placeholder.png"
 
-    def queue_download(self, url: str, target_path: Path):
+    def queue_download(self, url: str, target_path: Path, callback=None):
         """Queue an image for download
 
         Args:
             url: Image URL
             target_path: Where to save the image
+            callback: Optional callback to call when download completes
         """
         with self.download_lock:
-            if (url, target_path) not in self.download_queue:
-                self.download_queue.append((url, target_path))
+            # Check if already in queue (compare just url and path)
+            urls_paths = [(item[0], item[1]) for item in self.download_queue]
+            if (url, target_path) not in urls_paths:
+                self.download_queue.append((url, target_path, callback))
 
         # Start download thread if not running
         if not self.is_downloading:
@@ -100,10 +106,16 @@ class ImageService:
             with self.download_lock:
                 if not self.download_queue:
                     break
-                url, target_path = self.download_queue.pop(0)
+                item = self.download_queue.pop(0)
+                url = item[0]
+                target_path = item[1]
+                callback = item[2] if len(item) > 2 else None
 
             try:
                 self._download_image(url, target_path)
+                # Call callback if provided
+                if callback:
+                    callback(target_path)
                 time.sleep(0.5)  # Rate limiting
             except Exception as e:
                 logger.error(f"Failed to download image from {url}: {e}")
@@ -154,7 +166,7 @@ class ImageService:
         if mal_id:
             filename = f"mal_{mal_id}.jpg"
         else:
-            url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+            url_hash = hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:8]
             filename = f"cover_{url_hash}.jpg"
 
         target_path = self.cache_dir / filename
@@ -215,7 +227,7 @@ class ImageService:
         if mal_id:
             filename = f"mal_{mal_id}.jpg"
         else:
-            url_hash = hashlib.md5(image_url.encode()).hexdigest()[:8]
+            url_hash = hashlib.md5(image_url.encode(), usedforsecurity=False).hexdigest()[:8]
             filename = f"cover_{url_hash}.jpg"
 
         target_path = self.cache_dir / filename
