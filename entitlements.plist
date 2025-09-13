@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Allow app to access network for MAL sync -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- Allow app to act as network server for OAuth callback -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+
+    <!-- Allow app to use Python interpreter -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- Allow app to access keychain for token storage -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)dev.aeturnis.mirenku</string>
+    </array>
+
+    <!-- Allow JIT for Python -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+
+    <!-- Hardened runtime exception for Python -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

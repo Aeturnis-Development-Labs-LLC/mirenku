@@ -1,0 +1,166 @@
+name: Build Release Packages
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 0.3.2)'
+        required: true
+        default: '0.3.2'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Windows executable
+        run: |
+          pyinstaller mirenku.spec
+
+      - name: Create Windows package
+        shell: powershell
+        run: |
+          $VERSION = "${{ github.event.release.tag_name }}".TrimStart("v")
+          if (-not $VERSION) { $VERSION = "${{ github.event.inputs.version }}" }
+
+          # Create release directory
+          New-Item -ItemType Directory -Force -Path "release"
+
+          # Copy files
+          Copy-Item "dist\mirenku.exe" "release\"
+          Copy-Item "LICENSE" "release\LICENSE.txt" -ErrorAction SilentlyContinue
+          Copy-Item "README.md" "release\README.txt"
+          Copy-Item "SECURITY.md" "release\SECURITY.txt" -ErrorAction SilentlyContinue
+
+          # Create ZIP
+          Compress-Archive -Path "release\*" -DestinationPath "mirenku_v${VERSION}_windows.zip"
+
+          # Generate checksum
+          $hash = Get-FileHash "mirenku_v${VERSION}_windows.zip" -Algorithm SHA256
+          "$($hash.Hash)  mirenku_v${VERSION}_windows.zip" | Out-File "mirenku_v${VERSION}_windows.sha256"
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-package
+          path: |
+            mirenku_v*_windows.zip
+            mirenku_v*_windows.sha256
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build macOS app
+        run: |
+          chmod +x build_macos.sh
+          ./build_macos.sh
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-package
+          path: |
+            mirenku_v*_macos.dmg
+            mirenku_v*_macos.sha256
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk python3-pil.imagetk
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Linux packages
+        run: |
+          chmod +x build_linux.sh
+          ./build_linux.sh
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-package
+          path: |
+            Mirenku-*-x86_64.AppImage
+            mirenku_v*_linux_x64.tar.gz
+            mirenku_v*_linux*.sha256
+
+  upload-release-assets:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Display structure
+        run: ls -R
+
+      - name: Upload Windows release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            windows-package/mirenku_v*_windows.zip
+            windows-package/mirenku_v*_windows.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            macos-package/mirenku_v*_macos.dmg
+            macos-package/mirenku_v*_macos.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            linux-package/Mirenku-*-x86_64.AppImage
+            linux-package/mirenku_v*_linux_x64.tar.gz
+            linux-package/mirenku_v*_linux*.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
