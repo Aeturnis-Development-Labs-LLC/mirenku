@@ -61,14 +61,26 @@ Mirenku v0.3.2 brings comprehensive security enhancements, UI improvements, and 
 
 ## 📦 Installation
 
-### Windows
+### Windows (Stable)
 1. Download `mirenku_v0.3.2_windows.zip`
 2. Extract to desired location
 3. Run `mirenku.exe`
 
+### macOS (Experimental)
+**⚠️ Note: macOS support is experimental and may have issues**
+1. Download `mirenku_v0.3.2_macos.dmg`
+2. Open the DMG and drag Mirenku to Applications
+3. On first run, right-click and select "Open" to bypass Gatekeeper
+
+### Linux (Experimental)
+**⚠️ Note: Linux support is experimental and may have issues**
+1. Download `Mirenku-0.3.2-x86_64.AppImage` (recommended) or `mirenku_v0.3.2_linux_x64.tar.gz`
+2. For AppImage: `chmod +x` and run directly
+3. For tarball: extract and run `sudo ./install.sh`
+
 ### From Source
 ```bash
-git clone https://github.com/yourusername/mirenku.git
+git clone https://github.com/Aeturnis-Development-Labs-LLC/mirenku.git
 cd mirenku
 pip install -r requirements.txt
 python src/main.py

@@ -10,7 +10,8 @@
 [![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases)
 [![License](https://img.shields.io/badge/license-Prosperity%203.0-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku)
+[![Platform](https://img.shields.io/badge/Windows-Stable-green)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku)
+[![Platform](https://img.shields.io/badge/macOS%20%7C%20Linux-Experimental-yellow)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku)
 
 A powerful desktop application for tracking your anime viewing progress with MyAnimeList integration and synchronization.
 
@@ -51,27 +52,44 @@ A powerful desktop application for tracking your anime viewing progress with MyA
 
 ## 📦 Installation
 
-### Option 1: Run from Source
+### Windows (Stable)
+1. Download `mirenku_v*_windows.zip` from the [Releases](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases) page
+2. Extract the ZIP file
+3. Run `mirenku.exe`
 
-1. **Clone the repository:**
+### macOS (Experimental)
+**⚠️ Note: macOS support is experimental and may have issues**
+1. Download `mirenku_v*_macos.dmg` from the [Releases](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases) page
+2. Open the DMG and drag Mirenku to your Applications folder
+3. On first run, you may need to right-click and select "Open" to bypass Gatekeeper
+
+### Linux (Experimental)
+**⚠️ Note: Linux support is experimental and may have issues**
+
+#### AppImage (Recommended)
+1. Download `Mirenku-*-x86_64.AppImage` from the [Releases](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases) page
+2. Make it executable: `chmod +x Mirenku-*.AppImage`
+3. Run it: `./Mirenku-*.AppImage`
+
+#### Tarball
+1. Download `mirenku_v*_linux_x64.tar.gz` from the [Releases](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases) page
+2. Extract: `tar -xzf mirenku_v*_linux_x64.tar.gz`
+3. Install: `cd mirenku_v*_linux_x64 && sudo ./install.sh`
+
+### Run from Source (All Platforms)
+1. Clone the repository:
 ```bash
 git clone https://github.com/Aeturnis-Development-Labs-LLC/mirenku.git
 cd mirenku
 ```
-
-2. **Install dependencies:**
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
-
-3. **Run the application:**
+3. Run the application:
 ```bash
 python src/main.py
 ```
-
-### Option 2: Windows Executable (Coming Soon)
-
-Download the latest `.exe` file from the [Releases](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases) page.
 
 ## 🔗 MyAnimeList Setup
 
@@ -219,10 +237,12 @@ We welcome contributions! Here's how you can help:
 
 ## 📊 Project Status
 
-- **Current Version:** v0.3.0 (OAuth2 Integration Complete)
-- **Next Release:** v0.3.1 (Bug fixes and polish)
+- **Current Version:** v0.3.2 (Security Enhancements & UI Improvements)
 - **Test Status:** 150+ tests passing (81% OAuth coverage)
-- **Platform:** Windows (primary), Linux/Mac (experimental)
+- **Platform Support:**
+  - **Windows:** ✅ Stable (Primary platform)
+  - **macOS:** ⚠️ Experimental (Build available, limited testing)
+  - **Linux:** ⚠️ Experimental (AppImage/tarball available, limited testing)
 
 ## 📝 Versioning
 
@@ -231,7 +251,8 @@ We use [Semantic Versioning](http://semver.org/). For available versions, see th
 - **v0.1.0** - Local functionality complete ✅
 - **v0.2.0** - MyAnimeList integration ✅
 - **v0.3.0** - OAuth2 with custom protocol handler ✅
-- **v0.3.1** - Bug fixes and polish (in progress)
+- **v0.3.1** - OAuth2 improvements with custom protocol handler ✅
+- **v0.3.2** - Security enhancements & UI improvements ✅
 - **v1.0.0** - Production release (planned)
 
 ## 📜 License
