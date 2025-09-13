@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 # Import our components
 from utils.token_storage import TokenStorage
 from utils.protocol_handler import ProtocolHandler
+from utils.error_sanitizer import ErrorSanitizer, sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,8 @@ class MALOAuth2ProtocolClient:
     # Required scopes
     SCOPES = "anime:read anime:write user:read"
     
-    def __init__(self, client_id: str, token_storage_path: Path, refresh_buffer_minutes: int = 5, state_expiry_minutes: int = 5):
+    def __init__(self, client_id: str, token_storage_path: Path, refresh_buffer_minutes: int = 5,
+                 state_expiry_minutes: int = 5, max_auth_attempts: int = 3, rate_limit_window: int = 60):
         """
         Initialize OAuth2 client with protocol handler
 
@@ -48,6 +50,8 @@ class MALOAuth2ProtocolClient:
             token_storage_path: Path to store tokens
             refresh_buffer_minutes: Minutes before expiry to refresh token (default 5)
             state_expiry_minutes: Minutes before state parameter expires (default 5)
+            max_auth_attempts: Maximum auth attempts before rate limiting (default 3)
+            rate_limit_window: Time window in seconds for rate limiting (default 60)
         """
         self.client_id = client_id
         self.token_storage_path = token_storage_path
@@ -59,6 +63,8 @@ class MALOAuth2ProtocolClient:
         self.redirect_uri = self.REDIRECT_URI
         self.refresh_buffer_minutes = refresh_buffer_minutes
         self.state_expiry_minutes = state_expiry_minutes
+        self.max_auth_attempts = max_auth_attempts
+        self.rate_limit_window = rate_limit_window
 
         # Initialize token storage with encryption
         self.token_storage = TokenStorage(app_name="Mirenku")
@@ -71,6 +77,16 @@ class MALOAuth2ProtocolClient:
         # Refresh lock to prevent concurrent refreshes
         self._refresh_lock = threading.Lock()
         self._refresh_in_progress = False
+
+        # Rate limiting tracking (local, following The Mirenku Way)
+        self._auth_attempts = []  # List of attempt timestamps
+        self._refresh_attempts = []  # List of refresh attempt timestamps
+        self._failed_auth_count = 0  # Count of consecutive failed auths
+        self._lockout_until = None  # Lockout expiry time
+        self._rate_limit_lock = threading.Lock()  # Thread safety for rate limiting
+
+        # Error sanitizer for security
+        self.error_sanitizer = ErrorSanitizer()
 
         # Load existing tokens if available
         self._load_tokens()
@@ -210,7 +226,9 @@ class MALOAuth2ProtocolClient:
             error: Error from authorization
         """
         if error:
-            logger.error(f"OAuth error: {error}")
+            # Sanitize error before logging
+            sanitized_error = self.error_sanitizer.sanitize(error)
+            logger.error(f"OAuth error: {sanitized_error}")
             self.auth_error = error
             self.auth_received.set()
             return
@@ -252,16 +270,144 @@ class MALOAuth2ProtocolClient:
         # Signal completion
         self.auth_received.set()
     
+    def track_auth_attempt(self) -> None:
+        """
+        Track an authorization attempt for rate limiting
+        Following The Mirenku Way: Simple local tracking
+        """
+        with self._rate_limit_lock:
+            current_time = time.time()
+            self._auth_attempts.append(current_time)
+            # Clean old attempts outside the window
+            cutoff_time = current_time - self.rate_limit_window
+            self._auth_attempts = [t for t in self._auth_attempts if t > cutoff_time]
+
+    def track_failed_auth(self) -> None:
+        """
+        Track a failed authorization for lockout mechanism
+        """
+        with self._rate_limit_lock:
+            self._failed_auth_count += 1
+            if self._failed_auth_count >= 5:
+                # Lock out for 5 minutes after 5 failed attempts
+                self._lockout_until = time.time() + 300
+                logger.warning("Account locked out due to multiple failed auth attempts")
+
+    def reset_rate_limit(self, operation: str) -> None:
+        """
+        Reset rate limit counters for an operation after success
+
+        Args:
+            operation: 'authorize' or 'refresh'
+        """
+        with self._rate_limit_lock:
+            if operation == 'authorize':
+                self._auth_attempts.clear()
+                self._failed_auth_count = 0
+                self._lockout_until = None
+            elif operation == 'refresh':
+                self._refresh_attempts.clear()
+
+    def is_rate_limited(self, operation: str) -> bool:
+        """
+        Check if an operation is currently rate limited
+
+        Args:
+            operation: 'authorize' or 'refresh'
+
+        Returns:
+            True if rate limited
+        """
+        with self._rate_limit_lock:
+            current_time = time.time()
+
+            if operation == 'authorize':
+                # Clean old attempts
+                cutoff_time = current_time - self.rate_limit_window
+                self._auth_attempts = [t for t in self._auth_attempts if t > cutoff_time]
+
+                # Check if we've hit the limit
+                attempt_count = len(self._auth_attempts)
+                if attempt_count >= self.max_auth_attempts:
+                    logger.warning(f"Rate limit active for {operation}: {attempt_count} attempts in last {self.rate_limit_window} seconds")
+                    return True
+
+            elif operation == 'refresh':
+                # Clean old attempts
+                cutoff_time = current_time - self.rate_limit_window
+                self._refresh_attempts = [t for t in self._refresh_attempts if t > cutoff_time]
+
+                # Check if we've hit the limit (5 refresh attempts)
+                attempt_count = len(self._refresh_attempts)
+                if attempt_count >= 5:
+                    logger.warning(f"Rate limit active for {operation}: {attempt_count} attempts in last {self.rate_limit_window} seconds")
+                    return True
+
+            return False
+
+    def is_locked_out(self) -> bool:
+        """
+        Check if account is locked out due to failed attempts
+
+        Returns:
+            True if currently locked out
+        """
+        with self._rate_limit_lock:
+            if self._lockout_until is None:
+                return False
+
+            if time.time() < self._lockout_until:
+                remaining = int(self._lockout_until - time.time())
+                logger.warning(f"Account locked out for {remaining} more seconds")
+                return True
+
+            # Lockout expired, reset
+            self._lockout_until = None
+            self._failed_auth_count = 0
+            return False
+
+    def get_backoff_time(self) -> int:
+        """
+        Calculate exponential backoff time based on attempt count
+
+        Returns:
+            Backoff time in seconds
+        """
+        with self._rate_limit_lock:
+            # Count recent attempts
+            current_time = time.time()
+            cutoff_time = current_time - self.rate_limit_window
+            recent_attempts = [t for t in self._auth_attempts if t > cutoff_time]
+
+            # Exponential backoff: 2^(n-1) seconds
+            attempt_count = len(recent_attempts)
+            if attempt_count == 0:
+                return 0
+
+            backoff = min(2 ** (attempt_count - 1), 60)  # Cap at 60 seconds
+            return backoff
+
     def authorize(self, timeout: int = 120) -> bool:
         """
         Perform OAuth2 authorization flow with protocol handler
-        
+
         Args:
             timeout: Timeout in seconds to wait for callback
-            
+
         Returns:
             True if authorization successful
         """
+        # Check rate limiting first
+        if self.is_locked_out():
+            logger.error("Cannot authorize: Account is locked out due to failed attempts")
+            return False
+
+        if self.is_rate_limited('authorize'):
+            logger.warning("Rate limit exceeded for authorization. Please wait before trying again.")
+            return False
+
+        # Track this attempt
+        self.track_auth_attempt()
         try:
             # Setup protocol handler
             protocol_handler = ProtocolHandler()
@@ -303,13 +449,21 @@ class MALOAuth2ProtocolClient:
             # Just check if we have valid tokens
             if self.access_token and self.refresh_token:
                 logger.info("Authorization and token exchange completed successfully")
+                # Reset rate limiting on success
+                self.reset_rate_limit('authorize')
                 return True
             else:
                 logger.error("Token exchange failed during callback processing")
+                # Track failed auth for lockout
+                self.track_failed_auth()
                 return False
             
         except Exception as e:
-            logger.error(f"Authorization failed: {e}", exc_info=True)
+            # Sanitize exception message
+            sanitized_error = self.error_sanitizer.sanitize(str(e))
+            logger.error(f"Authorization failed: {sanitized_error}")
+            # Track failed auth for lockout
+            self.track_failed_auth()
             return False
     
     def _exchange_code_for_tokens(self, auth_code: str) -> bool:
@@ -381,12 +535,14 @@ class MALOAuth2ProtocolClient:
         except urllib.error.HTTPError as e:
             error_body = e.read().decode('utf-8')
             logger.error(f"Token exchange HTTP error {e.code}")
-            
+
             try:
                 error_data = json.loads(error_body)
                 error_msg = error_data.get('error', 'Unknown')
                 error_desc = error_data.get('error_description', 'No description')
-                logger.error(f"MAL Error: {error_msg} - {error_desc}")
+                # Sanitize error description before logging
+                sanitized_desc = self.error_sanitizer.sanitize(error_desc)
+                logger.error(f"MAL Error: {error_msg} - {sanitized_desc}")
                 
                 # Provide helpful error message for common issues
                 if error_msg == 'invalid_grant':
@@ -397,7 +553,9 @@ class MALOAuth2ProtocolClient:
             
             return False
         except Exception as e:
-            logger.error(f"Token exchange failed: {e}", exc_info=True)
+            # Sanitize exception message
+            sanitized_error = self.error_sanitizer.sanitize(str(e))
+            logger.error(f"Token exchange failed: {sanitized_error}")
             return False
     
     def refresh_access_token(self) -> bool:
@@ -407,6 +565,15 @@ class MALOAuth2ProtocolClient:
         Returns:
             True if successful
         """
+        # Check rate limiting
+        if self.is_rate_limited('refresh'):
+            logger.warning("Rate limit exceeded for token refresh. Please wait before trying again.")
+            return False
+
+        # Track refresh attempt
+        with self._rate_limit_lock:
+            self._refresh_attempts.append(time.time())
+
         # Prevent concurrent refresh attempts
         with self._refresh_lock:
             # If another thread is already refreshing, wait and return result
@@ -420,7 +587,11 @@ class MALOAuth2ProtocolClient:
             self._refresh_in_progress = True
 
         try:
-            return self._do_refresh_access_token()
+            result = self._do_refresh_access_token()
+            if result:
+                # Reset rate limit on success
+                self.reset_rate_limit('refresh')
+            return result
         finally:
             with self._refresh_lock:
                 self._refresh_in_progress = False
@@ -472,7 +643,9 @@ class MALOAuth2ProtocolClient:
                     return False
 
         except Exception as e:
-            logger.error(f"Token refresh failed: {e}")
+            # Sanitize exception message
+            sanitized_error = self.error_sanitizer.sanitize(str(e))
+            logger.error(f"Token refresh failed: {sanitized_error}")
             return False
 
     def refresh_access_token_with_retry(self, max_retries: int = 3) -> bool:
@@ -642,6 +815,30 @@ class MALOAuth2ProtocolClient:
             except:
                 pass
     
+    def _sanitize_error_response(self, error_response: Dict) -> Dict:
+        """
+        Sanitize an OAuth error response dictionary
+
+        Args:
+            error_response: Error response to sanitize
+
+        Returns:
+            Sanitized error response
+        """
+        return self.error_sanitizer.sanitize_dict(error_response)
+
+    def _sanitize_mal_error(self, error_msg: str) -> str:
+        """
+        Sanitize MAL-specific error messages
+
+        Args:
+            error_msg: Error message to sanitize
+
+        Returns:
+            Sanitized error message
+        """
+        return self.error_sanitizer.sanitize(error_msg)
+
     def logout(self):
         """Clear tokens and logout"""
         self.access_token = None

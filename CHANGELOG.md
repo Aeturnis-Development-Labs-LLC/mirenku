@@ -7,7 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
+### v0.3.2 (In Progress - Security Hardening Release)
+
+**Release Focus**: Comprehensive security improvements following The Mirenku Way - simple, local, and transparent security without compromising user experience.
+
+**Completion Status**: 50% (4 of 8 major security tasks completed)
+
+#### Completed Security Enhancements
+- **CRITICAL**: ✅ Eliminated base64 token storage fallback
+  - No automatic fallback to insecure storage
+  - Requires explicit user consent for any insecure storage
+  - OAuth flow fails safely when secure storage unavailable
+  - Added security warning dialogs
+  - Automatic migration from insecure to secure storage
+  
+- **CRITICAL**: ✅ Registry safety checks and backup
+  - Check for existing protocol handlers before registration
+  - Create registry backups before modifications
+  - Safe registration with conflict detection
+  - Registry restoration capabilities
+  - Prevents accidental overwrites
+
+- **CRITICAL**: ✅ Fixed Windows Credential Manager size limit (1783 error)
+  - Implemented split storage for large OAuth tokens
+  - Stores refresh token (secret) in keyring, metadata in file
+  - Automatic fallback to Fernet encryption when keyring fails
+  - Handles MAL's large authorization codes gracefully
+
+#### Improvements
+- **UX**: ✅ Silent token refresh at startup
+  - No error messages shown for expired tokens at startup
+  - Errors only logged when user-initiated actions fail
+  - Cleaner startup experience
+
+- **HIGH PRIORITY**: ✅ Token refresh buffer implementation
+  - 5-minute proactive refresh before token expiry
+  - Prevents authentication failures during operations
+  - Concurrent refresh protection with thread locks
+  - Network retry logic with exponential backoff
+  - Configurable buffer window
+
+- **MEDIUM PRIORITY**: ✅ OAuth state parameter enhancements
+  - State parameters now include timestamps
+  - 5-minute expiration to prevent replay attacks
+  - One-time use enforcement
+  - Base64-encoded JSON format
+  - Clear error messages for expired states
+
+- **MEDIUM PRIORITY**: ✅ Rate limiting for OAuth operations
+  - Maximum 3 authorization attempts per minute
+  - Maximum 5 token refresh attempts per minute
+  - 5-minute lockout after 5 failed auth attempts
+  - Exponential backoff (1s, 2s, 4s, 8s...)
+  - Thread-safe implementation with locks
+
+- **MEDIUM PRIORITY**: ✅ Comprehensive error message sanitization
+  - Automatic token redaction in logs
+  - Client ID partial masking (first 4 chars only)
+  - User path anonymization
+  - JSON payload sanitization
+  - Custom pattern support
+  - Logging integration with SanitizedLogHandler
+
+#### Testing & Documentation
+- **New Test Coverage**: 54 new security tests added
+  - `tests/test_token_refresh_buffer.py` - 13 tests
+  - `tests/test_oauth_state_timestamp.py` - 12 tests
+  - `tests/test_oauth_rate_limiting.py` - 13 tests
+  - `tests/test_error_sanitization.py` - 16 tests
+  - All tests passing with comprehensive coverage
+
+- **Security Documentation**:
+  - [Token Refresh Buffer](docs/SECURITY_IMPLEMENTATION_TOKEN_REFRESH_BUFFER.md)
+  - [OAuth State Timestamps](docs/SECURITY_IMPLEMENTATION_OAUTH_STATE_TIMESTAMP.md)
+  - [Rate Limiting](docs/SECURITY_IMPLEMENTATION_RATE_LIMITING.md)
+  - [Error Sanitization](docs/SECURITY_IMPLEMENTATION_ERROR_SANITIZATION.md)
+
+#### Pending Security Items
+- **CRITICAL**: Remove hardcoded client ID (✅ COMPLETED - now loads from config)
+- **LOW PRIORITY**: Enhanced PKCE with 128-char verifier (pending)
+- **DOCUMENTATION**: Complete SECURITY.md file (pending)
+- **MONITORING**: Security audit logging (pending)
+- **ENHANCEMENT**: Token encryption key rotation (pending)
+- See [Security TODO](docs/SECURITY_TODO_v0.3.2.md) for full details
+
+### Future Releases
 - Browser extension for streaming service integration
 - Advanced statistics and analytics
 - Themes and customization options
