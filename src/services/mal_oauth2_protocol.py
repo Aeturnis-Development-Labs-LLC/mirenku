@@ -41,7 +41,8 @@ class MALOAuth2ProtocolClient:
     SCOPES = "anime:read anime:write user:read"
     
     def __init__(self, client_id: str, token_storage_path: Path, refresh_buffer_minutes: int = 5,
-                 state_expiry_minutes: int = 5, max_auth_attempts: int = 3, rate_limit_window: int = 60):
+                 state_expiry_minutes: int = 5, max_auth_attempts: int = 3, rate_limit_window: int = 60,
+                 pkce_verifier_length: int = 128):
         """
         Initialize OAuth2 client with protocol handler
 
@@ -52,6 +53,7 @@ class MALOAuth2ProtocolClient:
             state_expiry_minutes: Minutes before state parameter expires (default 5)
             max_auth_attempts: Maximum auth attempts before rate limiting (default 3)
             rate_limit_window: Time window in seconds for rate limiting (default 60)
+            pkce_verifier_length: Length of PKCE code verifier (default 128, max security)
         """
         self.client_id = client_id
         self.token_storage_path = token_storage_path
@@ -65,6 +67,7 @@ class MALOAuth2ProtocolClient:
         self.state_expiry_minutes = state_expiry_minutes
         self.max_auth_attempts = max_auth_attempts
         self.rate_limit_window = rate_limit_window
+        self.pkce_verifier_length = min(max(43, pkce_verifier_length), 128)  # RFC 7636: 43-128 chars
 
         # Initialize token storage with encryption
         self.token_storage = TokenStorage(app_name="Mirenku")
@@ -93,20 +96,45 @@ class MALOAuth2ProtocolClient:
     
     def _generate_pkce_pair(self) -> Tuple[str, str]:
         """
-        Generate PKCE code verifier and challenge
-        
+        Generate PKCE code verifier and challenge with maximum entropy
+        Following The Mirenku Way: Maximum security, simple implementation
+
         Returns:
             Tuple of (code_verifier, code_challenge)
         """
-        # Generate code verifier (43-128 characters)
-        code_verifier = base64.urlsafe_b64encode(
-            secrets.token_bytes(32)
-        ).decode('utf-8').rstrip('=')
-        
-        # Generate code challenge (SHA256 hash)
+        # Calculate bytes needed for desired verifier length
+        # Base64 encoding produces 4 chars for every 3 bytes
+        # So for 128 chars, we need 96 bytes (128 * 3 / 4 = 96)
+        if self.pkce_verifier_length == 128:
+            bytes_needed = 96
+        elif self.pkce_verifier_length >= 86:
+            bytes_needed = 64  # Produces 86 chars after base64
+        elif self.pkce_verifier_length >= 43:
+            bytes_needed = 32  # Produces 43 chars after base64
+        else:
+            bytes_needed = 32  # Minimum
+
+        # Generate high-entropy random bytes using cryptographically secure random
+        random_bytes = secrets.token_bytes(bytes_needed)
+
+        # Convert to URL-safe base64 (using - and _ instead of + and /)
+        code_verifier = base64.urlsafe_b64encode(random_bytes).decode('utf-8').rstrip('=')
+
+        # Ensure we have exactly the desired length
+        if len(code_verifier) > self.pkce_verifier_length:
+            code_verifier = code_verifier[:self.pkce_verifier_length]
+        elif len(code_verifier) < self.pkce_verifier_length:
+            # Add more random characters if needed (shouldn't happen with correct calculation)
+            extra_bytes = secrets.token_bytes((self.pkce_verifier_length - len(code_verifier)) * 3 // 4 + 1)
+            extra_chars = base64.urlsafe_b64encode(extra_bytes).decode('utf-8').rstrip('=')
+            code_verifier += extra_chars[:self.pkce_verifier_length - len(code_verifier)]
+
+        # Generate code challenge using SHA256 (S256 method)
         challenge_bytes = hashlib.sha256(code_verifier.encode('ascii')).digest()
         code_challenge = base64.urlsafe_b64encode(challenge_bytes).decode('ascii').rstrip('=')
-        
+
+        logger.debug(f"Generated PKCE pair: verifier length={len(code_verifier)}, challenge length={len(code_challenge)}")
+
         return code_verifier, code_challenge
     
     def _generate_state(self) -> str:
