@@ -12,3 +12,8 @@ pyinstaller==6.3.0      # Create standalone executable
 
 # Optional - for future MAL integration
 jikanpy==4.3.2          # MyAnimeList API wrapper
+
+# v0.4.0 - Auto-Scrobbling & BYOC
+websockets>=12.0        # WebSocket server for browser extension
+pystray>=0.19.5         # System tray integration
+pillow>=10.4.0          # Required by pystray for icons (already listed above)
