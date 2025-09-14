@@ -207,11 +207,39 @@ print('✓ User can complete anime')
           fi
         shell: bash
 
+      - name: Package release
+        run: |
+          # Create release directory
+          mkdir -p release
+
+          # Copy executable
+          cp dist/${{ matrix.binary_name }} release/
+
+          # Copy documentation if exists
+          [ -f README.md ] && cp README.md release/ || echo "No README.md"
+          [ -f LICENSE ] && cp LICENSE release/ || echo "No LICENSE"
+          [ -f CHANGELOG.md ] && cp CHANGELOG.md release/ || echo "No CHANGELOG.md"
+
+          # Create ZIP package
+          cd release
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            # Windows: Use PowerShell to create ZIP
+            powershell Compress-Archive -Path * -DestinationPath ../mirenku-${{ matrix.os }}.zip
+          else
+            # Unix: Use zip command
+            zip -r ../mirenku-${{ matrix.os }}.zip *
+          fi
+          cd ..
+
+          echo "=== Package created: mirenku-${{ matrix.os }}.zip ==="
+          ls -la mirenku-${{ matrix.os }}.zip
+        shell: bash
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: dist/${{ matrix.binary_name }}
+          name: mirenku-${{ matrix.os }}
+          path: mirenku-${{ matrix.os }}.zip
 
   # ==========================================
   # RELEASE: Ship to users
@@ -230,10 +258,17 @@ print('✓ User can complete anime')
         with:
           path: artifacts/
 
+      - name: Display artifacts structure
+        run: |
+          echo "=== Downloaded artifacts ==="
+          ls -la artifacts/
+          find artifacts -type f -name "*.zip"
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*
+          files: |
+            artifacts/**/*.zip
           draft: false
           prerelease: false
           generate_release_notes: true
@@ -243,9 +278,14 @@ print('✓ User can complete anime')
             Built with love for anime fans! 🎌
 
             ### Downloads
-            - [Windows](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mirenku-windows.exe)
-            - [Linux](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mirenku-linux)
-            - [macOS](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mirenku-macos)
+            - **Windows**: `mirenku-windows-latest.zip`
+            - **Linux**: `mirenku-ubuntu-latest.zip`
+            - **macOS**: `mirenku-macos-latest.zip`
+
+            Each package includes:
+            - Standalone executable (no installation needed!)
+            - README and documentation
+            - License information
 
             ### Installation
             See [README](https://github.com/${{ github.repository }}#installation) for installation instructions.
