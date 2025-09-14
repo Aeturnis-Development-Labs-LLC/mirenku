@@ -153,11 +153,176 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 All security tasks from [Security TODO](docs/SECURITY_TODO_v0.3.2.md) have been completed!
 
 ### Future Releases
-- Browser extension for streaming service integration
-- Advanced statistics and analytics
-- Themes and customization options
-- Cloud synchronization
-- AniList integration
+## v0.4.0 - "Auto-Scrobbling & BYOC Update"
+**Focus: Automatic Progress Tracking + Bring Your Own Cloud**
+
+### Core Features
+- [ ] **Browser Extension for Streaming**
+  - Lightweight extension (< 100KB)
+  - Support for: Crunchyroll, Netflix, Hulu, HiDive, Funimation
+  - Local-only communication via WebSocket
+  - Auto-detect episode/series from page
+  - Queue updates when Mirenku is closed
+
+- [ ] **System Tray Mode**
+  - Minimize to system tray
+  - Quick access menu
+  - "Now Watching" indicator
+  - Pause/resume tracking
+  - Quick episode increment buttons
+
+- [ ] **Local Media Scrobbling**
+  - VLC plugin/integration
+  - MPV support
+  - Plex server detection
+  - Watch folder monitoring
+  - Smart filename parsing
+
+- [ ] **BYOC (Bring Your Own Cloud)**
+  - Use any cloud storage you already have
+  - Dropbox, Google Drive, OneDrive, iCloud support
+  - Git-based sync for advanced users
+  - Network share support (SMB, WebDAV)
+  - Self-hosted options (Syncthing, NextCloud)
+  - Zero Mirenku infrastructure - your cloud, your data
+
+- [ ] **Conflict Resolution**
+  - Simple merge dialog when local/MAL differ
+  - Multi-device sync conflict handling
+  - Preview changes before applying
+  - Rollback option
+
+---
+
+## v0.5.0 - "Data Control Update"
+**Focus: Better Data Management & Portability**
+
+### Core Features
+- [ ] **Versioned Backups**
+  - Timeline saves with restore points
+  - Diff viewer to see changes
+  - Auto-backup before major operations
+
+- [ ] **Portable Mode**
+  - Fully self-contained folder
+  - USB stick friendly
+  - No registry/system modifications
+  - Settings migration tool
+
+- [ ] **Custom Tags & Labels**
+  - User-defined tags (favorites, rewatch, etc.)
+  - Tag-based filtering
+  - Bulk tag operations
+  - Export tags with data
+
+- [ ] **Enhanced Import/Export**
+  - AniList support
+  - Kitsu integration
+  - Universal anime format
+  - Batch import from multiple sources
+
+---
+
+## v0.6.0 - "Power User Update"
+**Focus: Efficiency for Heavy Users**
+
+### Core Features
+- [ ] **Keyboard-First Navigation**
+  - Vim-style shortcuts
+  - Command palette (Ctrl+K)
+  - Quick add via hotkey
+  - Navigate without mouse
+
+- [ ] **Batch Operations**
+  - Multi-select mode
+  - Bulk status changes
+  - Mass score updates
+  - Group operations
+
+- [ ] **Smart Filters & Search**
+  - Advanced query builder
+  - Saved filter presets
+  - Quick filter bar
+  - Regex support
+
+- [ ] **Custom Fields**
+  - Add personal data fields
+  - Streaming service tracking
+  - Priority/watchlist order
+  - Custom scoring systems
+
+---
+
+## v0.7.0 - "Insights Update"
+**Focus: Understanding Your Viewing Habits**
+
+### Core Features
+- [ ] **Statistics Dashboard**
+  - Total time watched
+  - Completion trends
+  - Genre preferences
+  - Score distribution
+  - Viewing patterns
+
+- [ ] **Rewatch Tracking**
+  - Track rewatch count
+  - Rewatch dates
+  - Favorite episodes
+  - Rewatch notes
+
+- [ ] **Export for Sharing**
+  - HTML blog export
+  - Markdown for forums
+  - Image card generation
+  - Stats infographic
+
+---
+
+## v0.8.0 - "Polish Update"
+**Focus: UI/UX Refinement**
+
+### Core Features
+- [ ] **Theme System**
+  - Dark/Light/Auto modes
+  - Custom accent colors
+  - Font size options
+  - Compact/comfortable views
+
+- [ ] **Rich Notes**
+  - Markdown support
+  - Episode-specific notes
+  - Spoiler tags
+  - Note templates
+
+- [ ] **Performance Optimizations**
+  - Faster startup
+  - Lazy loading for large lists
+  - Background sync
+  - Reduced memory usage
+
+---
+
+## v0.9.0 - "Community Update"
+**Focus: Sharing Without Sacrificing Privacy**
+
+### Core Features
+- [ ] **Local Recommendation Engine**
+  - Based on your scores/genres
+  - No external data collection
+  - Similarity matching
+  - "More like this" feature
+
+- [ ] **List Comparison**
+  - Compare exported lists
+  - Find common anime
+  - Compatibility scores
+  - Watch together suggestions
+
+- [ ] **Quick Share Options**
+  - Generate share links
+  - QR codes for mobile
+  - Temporary public links
+  - Password-protected shares
 
 ## [0.3.1] - 2025-09-09
 
