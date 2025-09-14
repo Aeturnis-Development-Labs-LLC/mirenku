@@ -34,7 +34,11 @@ jobs:
 
     - name: Run tests
       run: |
-        python -m pytest tests/ -v --tb=short -k "not (dialog or gui or UI)" --ignore=tests/test_first_run_dialog.py --ignore=tests/test_mal_auth_dialog.py
+        python -m pytest tests/ -v --tb=short \
+          -m "not gui" \
+          --ignore=tests/test_first_run_dialog.py \
+          --ignore=tests/test_mal_auth_dialog.py \
+          --maxfail=10
 
     - name: Test GUI initialization (headless)
       run: |

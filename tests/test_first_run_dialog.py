@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from ui.first_run_dialog import FirstRunDialog
 
 
+@pytest.mark.gui
 class TestFirstRunDialogUI:
     """Test First Run Dialog UI components"""
     
@@ -104,6 +105,7 @@ class TestFirstRunDialogUI:
         dialog.dialog.destroy()
 
 
+@pytest.mark.gui
 class TestFirstRunDialogBehavior:
     """Test First Run Dialog behavior"""
     
@@ -246,6 +248,7 @@ class TestFirstRunDialogBehavior:
         first_run_mgr.save_app_location.assert_called_once_with('C:\\Program Files\\Mirenku\\mirenku.exe')
 
 
+# This class tests static methods, no GUI needed
 class TestFirstRunDialogStatic:
     """Test static helper methods"""
     

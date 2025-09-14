@@ -57,8 +57,7 @@ jobs:
   test:
     name: Test - ${{ matrix.os }} / Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
-    continue-on-error: true  # Don't fail the workflow if tests fail
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -85,17 +84,25 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov pytest-xvfb
 
-      - name: Run tests (Linux)
+      - name: Run unit tests (Linux)
         if: runner.os == 'Linux'
         run: |
-          xvfb-run -a pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing -k "not (dialog or gui or UI)" --ignore=tests/test_first_run_dialog.py --ignore=tests/test_mal_auth_dialog.py || true
+          xvfb-run -a pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing \
+            -m "not gui" \
+            --ignore=tests/test_first_run_dialog.py \
+            --ignore=tests/test_mal_auth_dialog.py \
+            --maxfail=10
         env:
           DISPLAY: ':99.0'
 
-      - name: Run tests (Windows/macOS)
+      - name: Run unit tests (Windows/macOS)
         if: runner.os != 'Linux'
         run: |
-          pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing -k "not (dialog or gui or UI)" --ignore=tests/test_first_run_dialog.py --ignore=tests/test_mal_auth_dialog.py || true
+          pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing \
+            -m "not gui" \
+            --ignore=tests/test_first_run_dialog.py \
+            --ignore=tests/test_mal_auth_dialog.py \
+            --maxfail=10
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
