@@ -19,29 +19,33 @@ def test_basic_user_workflow():
     service = AnimeService(db)
 
     # User adds an anime
-    anime_id = service.add_anime('Test Anime', status='Watching')
+    result = service.add_anime('Test Anime', status='Watching')
+    # add_anime returns (success, message, anime_id)
+    success, message, anime_id = result
+    assert success, f"Failed to add anime: {message}"
+
     anime = service.get_anime(anime_id)
-    assert anime is not None, "Failed to add anime"
-    print(f'✓ User can add anime: {anime.title}')
+    assert anime is not None, "Failed to get anime"
+    print(f'[OK] User can add anime: {anime.title}')
 
     # User tracks progress
     service.increment_episode(anime_id)
     anime = service.get_anime(anime_id)
     assert anime.episodes_watched == 1, "Failed to track progress"
-    print('✓ User can track progress')
+    print('[OK] User can track progress')
 
     # User completes anime
     service.update_anime(anime_id, status='Completed')
     anime = service.get_anime(anime_id)
     assert anime.status == 'Completed', "Failed to complete anime"
-    print('✓ User can complete anime')
+    print('[OK] User can complete anime')
 
     # User can list their anime
     all_anime = service.get_all_anime()
     assert len(all_anime) == 1, "Failed to list anime"
-    print('✓ User can see their anime list')
+    print('[OK] User can see their anime list')
 
-    print('\n🎌 Basic user operations work!')
+    print('\n[SUCCESS] Basic user operations work!')
     return True
 
 if __name__ == '__main__':
@@ -49,5 +53,5 @@ if __name__ == '__main__':
         success = test_basic_user_workflow()
         sys.exit(0 if success else 1)
     except Exception as e:
-        print(f'❌ Test failed: {e}')
+        print(f'[FAIL] Test failed: {e}')
         sys.exit(1)
