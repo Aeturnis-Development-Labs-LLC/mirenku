@@ -10,8 +10,8 @@ from tkinter import messagebox, ttk
 from typing import Optional
 
 # Import managers
-from utils.first_run import FirstRunManager
-from utils.protocol_manager import ProtocolManager
+from src.utils.first_run import FirstRunManager
+from src.utils.protocol_manager import ProtocolManager
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ class SettingsDialog:
         config=None,
         first_run_manager: FirstRunManager = None,
         protocol_manager: ProtocolManager = None,
+        scrobbling_manager=None,
     ):
         """
         Initialize Settings Dialog
@@ -33,11 +34,13 @@ class SettingsDialog:
             parent: Parent window
             first_run_manager: First run manager instance (optional)
             protocol_manager: Protocol manager instance (optional)
+            scrobbling_manager: Scrobbling manager instance (optional)
         """
         self.parent = parent
         self.config = config  # Added config parameter
         self.first_run_manager = first_run_manager or FirstRunManager()
         self.protocol_manager = protocol_manager or ProtocolManager()
+        self.scrobbling_manager = scrobbling_manager
         self.result = None
 
         # Create dialog window
@@ -74,6 +77,11 @@ class SettingsDialog:
             value=self.config.get("show_update_dialog", True) if self.config else True
         )
 
+        # Scrobbling variables (if manager is provided)
+        if self.scrobbling_manager:
+            self.scrobbling_enabled_var = tk.BooleanVar(value=self.scrobbling_manager.enabled)
+            self.scrobbling_port_var = tk.StringVar(value=str(self.scrobbling_manager.port))
+
         # Create UI
         self._create_ui()
 
@@ -102,6 +110,10 @@ class SettingsDialog:
         self._create_protocol_tab()
         self._create_sync_tab()
         self._create_updates_tab()
+
+        # Create scrobbling tab if manager is provided
+        if self.scrobbling_manager:
+            self._create_scrobbling_tab()
 
         # Buttons frame
         button_frame = ttk.Frame(main_frame)
@@ -447,6 +459,172 @@ class SettingsDialog:
         state = "normal" if self.auto_sync_var.get() else "readonly"
         self.interval_spinbox.config(state=state)
 
+    def _create_scrobbling_tab(self):
+        """Create Scrobbling settings tab"""
+        self.scrobbling_frame = ttk.Frame(self.notebook, padding="20")
+        self.notebook.add(self.scrobbling_frame, text="Scrobbling")
+
+        # Scrobbling settings frame
+        settings_frame = ttk.LabelFrame(
+            self.scrobbling_frame, text="WebSocket Server Settings", padding="15"
+        )
+        settings_frame.pack(fill=tk.X, pady=(0, 20))
+
+        # Enable/disable checkbox
+        self.scrobbling_checkbox = ttk.Checkbutton(
+            settings_frame,
+            text="Enable scrobbling server for browser extensions",
+            variable=self.scrobbling_enabled_var,
+            command=self._on_scrobbling_toggle,
+        )
+        self.scrobbling_checkbox.pack(anchor=tk.W)
+
+        # Port configuration
+        port_frame = ttk.Frame(settings_frame)
+        port_frame.pack(anchor=tk.W, pady=(10, 0))
+
+        ttk.Label(port_frame, text="Server port:").pack(side=tk.LEFT)
+
+        self.scrobbling_port_entry = ttk.Entry(
+            port_frame, textvariable=self.scrobbling_port_var, width=10
+        )
+        self.scrobbling_port_entry.pack(side=tk.LEFT, padx=(10, 5))
+        self.scrobbling_port_entry.bind("<FocusOut>", lambda e: self._on_port_change())
+
+        ttk.Label(port_frame, text="(default: 7834)").pack(side=tk.LEFT)
+
+        # Status frame
+        status_frame = ttk.LabelFrame(self.scrobbling_frame, text="Server Status", padding="15")
+        status_frame.pack(fill=tk.X, pady=(0, 20))
+
+        # Status label
+        self.scrobbling_status_label = ttk.Label(
+            status_frame, text="Checking status...", font=("Segoe UI", 10)
+        )
+        self.scrobbling_status_label.pack(anchor=tk.W)
+
+        # Info frame
+        info_frame = ttk.LabelFrame(self.scrobbling_frame, text="Information", padding="15")
+        info_frame.pack(fill=tk.X)
+
+        info_text = (
+            "The scrobbling server allows browser extensions to communicate with Mirenku.\n\n"
+            "• Runs a WebSocket server on localhost\n"
+            "• Accepts connections from browser extensions\n"
+            "• Automatically tracks anime watching progress\n"
+            "• No external connections - fully private\n\n"
+            "Install the Mirenku browser extension to start auto-scrobbling!"
+        )
+
+        info_label = ttk.Label(
+            info_frame,
+            text=info_text,
+            wraplength=500,
+            foreground="gray",
+            font=("Segoe UI", 9),
+        )
+        info_label.pack(anchor=tk.W)
+
+        # Update initial status
+        self._update_scrobbling_status()
+        self._update_scrobbling_ui_state()
+
+    def _on_scrobbling_toggle(self):
+        """Handle scrobbling enable/disable toggle"""
+        if self.scrobbling_enabled_var.get():
+            # Enable scrobbling
+            success = self.scrobbling_manager.enable()
+            if not success:
+                self.scrobbling_enabled_var.set(False)
+                messagebox.showerror(
+                    "Error",
+                    "Failed to start scrobbling server. "
+                    "The port may be in use or another error occurred.",
+                    parent=self.dialog,
+                )
+        else:
+            # Disable scrobbling
+            self.scrobbling_manager.disable()
+
+        self._update_scrobbling_status()
+        self._update_scrobbling_ui_state()
+
+    def _on_port_change(self):
+        """Handle port change"""
+        try:
+            port = int(self.scrobbling_port_var.get())
+            if self._validate_port(str(port)):
+                success = self.scrobbling_manager.set_port(port)
+                if not success:
+                    # Revert to current port if change failed
+                    self.scrobbling_port_var.set(str(self.scrobbling_manager.port))
+                    messagebox.showerror(
+                        "Error",
+                        f"Failed to change port to {port}.",
+                        parent=self.dialog,
+                    )
+                else:
+                    self._update_scrobbling_status()
+            else:
+                # Invalid port, revert
+                self.scrobbling_port_var.set(str(self.scrobbling_manager.port))
+                messagebox.showerror(
+                    "Invalid Port",
+                    "Port must be between 1024 and 65535.",
+                    parent=self.dialog,
+                )
+        except ValueError:
+            # Non-numeric input, revert
+            self.scrobbling_port_var.set(str(self.scrobbling_manager.port))
+            messagebox.showerror(
+                "Invalid Port",
+                "Please enter a valid port number.",
+                parent=self.dialog,
+            )
+
+    def _validate_port(self, port_str):
+        """Validate port number"""
+        try:
+            port = int(port_str)
+            return 1024 <= port <= 65535
+        except ValueError:
+            return False
+
+    def _update_scrobbling_status(self):
+        """Update scrobbling server status display"""
+        if not self.scrobbling_manager:
+            return
+
+        status = self.scrobbling_manager.get_status()
+
+        if status["running"]:
+            clients = status["clients"]
+            sessions = status["sessions"]
+            client_text = f"{clients} client{'s' if clients != 1 else ''}"
+            session_text = f"{sessions} session{'s' if sessions != 1 else ''}"
+            self.scrobbling_status_label.config(
+                text=f"✓ Running on port {status['port']} - {client_text}, {session_text}",
+                foreground="green",
+            )
+        elif status["enabled"]:
+            self.scrobbling_status_label.config(
+                text=f"⚠ Enabled but not running on port {status['port']}",
+                foreground="orange",
+            )
+        else:
+            self.scrobbling_status_label.config(text="✗ Disabled", foreground="red")
+
+    def _update_scrobbling_ui_state(self):
+        """Update UI state based on server status"""
+        if not self.scrobbling_manager:
+            return
+
+        # Disable port entry when server is running
+        if self.scrobbling_manager.is_running():
+            self.scrobbling_port_entry.config(state="disabled")
+        else:
+            self.scrobbling_port_entry.config(state="normal")
+
     def _configure_styles(self):
         """Configure custom styles"""
         style = ttk.Style()
@@ -472,6 +650,10 @@ class SettingsDialog:
 
         self.dialog.geometry(f"{window_width}x{window_height}+{x}+{y}")
 
+    def _save_settings(self):
+        """Save settings method for testing compatibility"""
+        self._on_save()
+
     def _on_save(self):
         """Handle Save button"""
         # Save all preferences
@@ -485,6 +667,15 @@ class SettingsDialog:
         if self.config:
             self.config.set("check_for_updates", self.check_updates_var.get())
             self.config.set("show_update_dialog", self.show_update_dialog_var.get())
+
+            # Save scrobbling settings if manager is available
+            if self.scrobbling_manager:
+                scrobbling_config = {
+                    "enabled": self.scrobbling_enabled_var.get(),
+                    "port": int(self.scrobbling_port_var.get())
+                }
+                self.config.set("scrobbling", scrobbling_config)
+
             self.config.save()
 
         logger.info("Settings saved")
