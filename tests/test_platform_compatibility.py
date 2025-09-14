@@ -1,5 +1,6 @@
 """Cross-platform compatibility tests"""
 
+import os
 import platform
 import sys
 import tkinter as tk
