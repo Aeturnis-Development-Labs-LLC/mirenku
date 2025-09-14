@@ -7,7 +7,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from models.database import Database
 from services.anime_service import AnimeService
@@ -110,7 +110,7 @@ class PersistenceManager:
             logger.error(f"Export to JSON failed: {e}")
             return False
 
-    def import_from_json(self, file_path: Path) -> tuple[int, int, List[str]]:
+    def import_from_json(self, file_path: Path) -> Tuple[int, int, List[str]]:
         """Import anime list from JSON file
 
         Args:
@@ -235,7 +235,7 @@ class PersistenceManager:
             logger.error(f"Export to CSV failed: {e}")
             return False
 
-    def import_from_csv(self, file_path: Path) -> tuple[int, int, List[str]]:
+    def import_from_csv(self, file_path: Path) -> Tuple[int, int, List[str]]:
         """Import anime list from CSV file
 
         Args:
