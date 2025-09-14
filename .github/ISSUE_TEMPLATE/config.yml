@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security reports (vulnerabilities)
+    url: "mailto:projects@aeturnis.dev?subject=%5BSECURITY%5D%20Mirenku%20Vulnerability%20Report"
+    about: "Please do NOT open public issues for security. Email us with steps and impact."
+  - name: Documentation & FAQs
+    url: "https://mirenku.org"
+    about: "Setup guides, features, troubleshooting."
+  - name: Latest download
+    url: "https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases/latest"
+    about: "Windows build (primary) and experimental macOS/Linux builds with checksums."

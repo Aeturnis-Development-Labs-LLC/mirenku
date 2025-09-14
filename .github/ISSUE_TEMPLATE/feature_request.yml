@@ -1,0 +1,77 @@
+name: "Feature request"
+description: "Suggest an idea to improve Mirenku."
+title: "[feat]: <short description>"
+labels: ["enhancement", "needs-spec"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for the idea! Help us understand the problem and the desired outcome."
+
+  - type: checkboxes
+    id: dupes
+    attributes:
+      label: First checks
+      options:
+        - label: I searched existing issues and discussions
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: "What's the pain or use case? Keep it user-focused."
+      placeholder: "When I ..., it's hard to ..."
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution / UX
+      description: "How should it work? If possible, include rough acceptance criteria."
+      placeholder: |
+        - As a user, I can ...
+        - It's done when ...
+        - Edge cases: ...
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives / workarounds
+      placeholder: "Any current workaround you use?"
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority (your perspective)
+      options:
+        - Nice to have
+        - Important
+        - Critical
+    validations:
+      required: true
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Primary audience
+      options:
+        - Everyone
+        - Power users
+        - Heavy MAL users
+        - macOS/Linux users
+        - Windows users
+
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Platforms impacted
+      multiple: true
+      options:
+        - Windows
+        - macOS
+        - Linux
+
+  - type: textarea
+    id: extras
+    attributes:
+      label: Additional context / mockups
+      description: "Links to sketches, screenshots, or similar apps are welcome."
