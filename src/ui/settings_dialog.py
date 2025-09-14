@@ -10,8 +10,8 @@ from tkinter import messagebox, ttk
 from typing import Optional
 
 # Import managers
-from src.utils.first_run import FirstRunManager
-from src.utils.protocol_manager import ProtocolManager
+from utils.first_run import FirstRunManager
+from utils.protocol_manager import ProtocolManager
 
 logger = logging.getLogger(__name__)
 
@@ -676,7 +676,7 @@ class SettingsDialog:
                 }
                 self.config.set("scrobbling", scrobbling_config)
 
-            self.config.save()
+            # Config auto-saves when set() is called
 
         logger.info("Settings saved")
 

@@ -6,7 +6,7 @@ Manages WebSocket server and browser extension communication
 import logging
 from typing import Optional
 
-from src.services.websocket_server import ScrobblingServer
+from services.websocket_server import ScrobblingServer
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class ScrobblingManager:
         scrobbling_config["enabled"] = True
         scrobbling_config["port"] = self.port
         self.config.set("scrobbling", scrobbling_config)
-        self.config.save()
+        # Config auto-saves when set() is called
         return self.start()
 
     def disable(self):
@@ -92,7 +92,7 @@ class ScrobblingManager:
         scrobbling_config["enabled"] = False
         scrobbling_config["port"] = self.port
         self.config.set("scrobbling", scrobbling_config)
-        self.config.save()
+        # Config auto-saves when set() is called
         return self.stop()
 
     def set_port(self, port: int) -> bool:
@@ -116,7 +116,7 @@ class ScrobblingManager:
         scrobbling_config = self.config.get("scrobbling", {})
         scrobbling_config["port"] = port
         self.config.set("scrobbling", scrobbling_config)
-        self.config.save()
+        # Config auto-saves when set() is called
 
         # Restart server if running and port changed
         if self.is_running() and old_port != port:

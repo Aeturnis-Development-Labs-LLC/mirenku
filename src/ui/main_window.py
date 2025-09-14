@@ -68,6 +68,16 @@ class MainWindow:
             # Client ID is embedded in the application
         )
 
+        # Set up ScrobblingManager for WebSocket server (v0.4.0)
+        try:
+            from services.scrobbling_manager import ScrobblingManager
+            self.scrobbling_manager = ScrobblingManager(self.service, self.config)
+            # Start server if enabled
+            self.scrobbling_manager.start()
+        except Exception as e:
+            logger.warning(f"Failed to initialize ScrobblingManager: {e}")
+            self.scrobbling_manager = None
+
         # Set up MAL API v2 service if authenticated (silent check at startup)
         self.mal_api_v2_service = None
         if self.mal_auth_manager.is_authenticated(silent=True):
@@ -1231,8 +1241,12 @@ Added This Week: {stats.get('added_this_week', 0)}"""
         """Show settings dialog"""
         from ui.settings_dialog import SettingsDialog
 
-        # Create settings dialog with update check option
-        dialog = SettingsDialog(self.root, config=self.config)
+        # Create settings dialog with update check option and scrobbling manager
+        dialog = SettingsDialog(
+            self.root,
+            config=self.config,
+            scrobbling_manager=getattr(self, 'scrobbling_manager', None)
+        )
         self.root.wait_window(dialog.dialog)
 
         if dialog.result:
@@ -1449,6 +1463,13 @@ Added This Week: {stats.get('added_this_week', 0)}"""
         self.persistence.save_window_state(
             geometry=self.root.geometry(), filter_status=self.current_filter.get()
         )
+
+        # Stop scrobbling server if running
+        if hasattr(self, 'scrobbling_manager') and self.scrobbling_manager:
+            try:
+                self.scrobbling_manager.stop()
+            except Exception as e:
+                logger.error(f"Error stopping scrobbling server: {e}")
 
         # Stop database watcher
         self.db_watcher.stop()

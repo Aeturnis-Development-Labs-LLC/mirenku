@@ -1,0 +1,136 @@
+name: "Bug report"
+description: "Something not working as expected? Tell us so we can fix it."
+title: "[bug]: <short description>"
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in as much as you can.
+        **Note:** Do *not* report security vulnerabilities here — use the Security link below.
+
+  - type: checkboxes
+    id: sanity
+    attributes:
+      label: First checks
+      options:
+        - label: I searched existing issues and discussions
+          required: true
+        - label: I'm on the latest release (or I reproduced it on the latest pre-release)
+          required: true
+        - label: This is **not** a security vulnerability (if it is, please use "Security reports" below)
+          required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (experimental)
+        - Linux (experimental)
+    validations:
+      required: true
+
+  - type: input
+    id: os_version
+    attributes:
+      label: OS version / distro
+      placeholder: "e.g., Windows 11 23H2, macOS 14.5, Ubuntu 22.04"
+
+  - type: dropdown
+    id: install_type
+    attributes:
+      label: Install type
+      options:
+        - Windows Installer (.exe)
+        - Windows ZIP (portable)
+        - macOS DMG (unsigned)
+        - Linux AppImage
+        - Linux ZIP
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: Mirenku version
+      placeholder: "e.g., 0.3.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: repro
+    attributes:
+      label: Reproducibility
+      options:
+        - Always
+        - Often
+        - Sometimes
+        - Rarely
+        - Unable to reproduce again
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Blocks install / cannot launch
+        - Crash / freeze
+        - Data loss or corruption
+        - Incorrect data / sync issue
+        - Performance problem
+        - UI/UX glitch
+        - Other
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: "Numbered steps help a lot."
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: "What did you expect to happen?"
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: "What actually happened? Include any error messages shown."
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / crash info
+      description: |
+        Paste relevant log lines or attach a file after submitting.
+        Tokens and PII should be auto-redacted by Mirenku, but please double-check before posting.
+      render: text
+
+  - type: textarea
+    id: samples
+    attributes:
+      label: Sample files (if import/export)
+      description: "Attach a tiny CSV/JSON that reproduces the issue, or describe the format."
+
+  - type: input
+    id: uses_mal
+    attributes:
+      label: Were MAL features involved?
+      placeholder: "e.g., login, sync, import — yes/no"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context / screenshots
+      description: "Links to screenshots or a short screen recording help a lot."

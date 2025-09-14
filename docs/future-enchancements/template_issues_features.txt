@@ -1,0 +1,237 @@
+Create these files in your repo:
+
+.github/
+└─ ISSUE_TEMPLATE/
+   ├─ bug_report.yml
+   ├─ feature_request.yml
+   └─ config.yml
+
+.github/ISSUE_TEMPLATE/bug_report.yml
+name: "Bug report"
+description: "Something not working as expected? Tell us so we can fix it."
+title: "[bug]: <short description>"
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in as much as you can.
+        **Note:** Do *not* report security vulnerabilities here — use the Security link below.
+
+  - type: checkboxes
+    id: sanity
+    attributes:
+      label: First checks
+      options:
+        - label: I searched existing issues and discussions
+          required: true
+        - label: I’m on the latest release (or I reproduced it on the latest pre-release)
+          required: true
+        - label: This is **not** a security vulnerability (if it is, please use "Security reports" below)
+          required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (experimental)
+        - Linux (experimental)
+    validations:
+      required: true
+
+  - type: input
+    id: os_version
+    attributes:
+      label: OS version / distro
+      placeholder: "e.g., Windows 11 23H2, macOS 14.5, Ubuntu 22.04"
+
+  - type: dropdown
+    id: install_type
+    attributes:
+      label: Install type
+      options:
+        - Windows Installer (.exe)
+        - Windows ZIP (portable)
+        - macOS DMG (unsigned)
+        - Linux AppImage
+        - Linux ZIP
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: Mirenku version
+      placeholder: "e.g., 0.3.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: repro
+    attributes:
+      label: Reproducibility
+      options:
+        - Always
+        - Often
+        - Sometimes
+        - Rarely
+        - Unable to reproduce again
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Blocks install / cannot launch
+        - Crash / freeze
+        - Data loss or corruption
+        - Incorrect data / sync issue
+        - Performance problem
+        - UI/UX glitch
+        - Other
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: "Numbered steps help a lot."
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: "What did you expect to happen?"
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: "What actually happened? Include any error messages shown."
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / crash info
+      description: |
+        Paste relevant log lines or attach a file after submitting.
+        Tokens and PII should be auto-redacted by Mirenku, but please double-check before posting.
+      render: text
+
+  - type: textarea
+    id: samples
+    attributes:
+      label: Sample files (if import/export)
+      description: "Attach a tiny CSV/JSON that reproduces the issue, or describe the format."
+
+  - type: input
+    id: uses_mal
+    attributes:
+      label: Were MAL features involved?
+      placeholder: "e.g., login, sync, import — yes/no"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context / screenshots
+      description: "Links to screenshots or a short screen recording help a lot."
+
+.github/ISSUE_TEMPLATE/feature_request.yml
+name: "Feature request"
+description: "Suggest an idea to improve Mirenku."
+title: "[feat]: <short description>"
+labels: ["enhancement", "needs-spec"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for the idea! Help us understand the problem and the desired outcome."
+
+  - type: checkboxes
+    id: dupes
+    attributes:
+      label: First checks
+      options:
+        - label: I searched existing issues and discussions
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: "What’s the pain or use case? Keep it user-focused."
+      placeholder: "When I ..., it’s hard to ..."
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution / UX
+      description: "How should it work? If possible, include rough acceptance criteria."
+      placeholder: |
+        - As a user, I can ...
+        - It’s done when ...
+        - Edge cases: ...
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives / workarounds
+      placeholder: "Any current workaround you use?"
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority (your perspective)
+      options:
+        - Nice to have
+        - Important
+        - Critical
+    validations:
+      required: true
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Primary audience
+      options:
+        - Everyone
+        - Power users
+        - Heavy MAL users
+        - macOS/Linux users
+        - Windows users
+
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Platforms impacted
+      multiple: true
+      options:
+        - Windows
+        - macOS
+        - Linux
+
+  - type: textarea
+    id: extras
+    attributes:
+      label: Additional context / mockups
+      description: "Links to sketches, screenshots, or similar apps are welcome."
+
+.github/ISSUE_TEMPLATE/config.yml
+blank_issues_enabled: false
+contact_links:
+  - name: Security reports (vulnerabilities)
+    url: "mailto:projects@aeturnis.dev?subject=%5BSECURITY%5D%20Mirenku%20Vulnerability%20Report"
+    about: "Please do NOT open public issues for security. Email us with steps and impact."
+  - name: Documentation & FAQs
+    url: "https://mirenku.org"
+    about: "Setup guides, features, troubleshooting."
+  - name: Latest download
+    url: "https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases/latest"
+    about: "Windows build (primary) and experimental macOS/Linux builds with checksums."
