@@ -42,7 +42,7 @@ def check_platform():
         # This is OK for headless CI
 
     # Test file operations work
-    test_file = config.get_data_dir() / 'test_write.tmp'
+    test_file = config.get_data_directory() / 'test_write.tmp'
     try:
         test_file.write_text('test')
         test_file.unlink()
