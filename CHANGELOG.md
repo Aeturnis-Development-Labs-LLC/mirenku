@@ -379,10 +379,10 @@ All security tasks from [Security TODO](docs/SECURITY_TODO_v0.3.2.md) have been 
 
 ## Version History
 
-- **0.3.1** - OAuth2 improvements with custom protocol handler (mirenku://)
-- **0.3.0** - MyAnimeList integration with OAuth2 and full synchronization (Phase 2 & 3 complete)
-- **0.1.1** - Bug fixes and improvements based on v0.1.0 feedback
 - **0.1.0** - Initial release with core local functionality (Phase 1)
+- **0.1.1** - Bug fixes and improvements based on v0.1.0 feedback
+- **0.3.0** - MyAnimeList integration with OAuth2 and full synchronization (Phase 2 & 3 complete)
+- **0.3.1** - OAuth2 improvements with custom protocol handler (mirenku://)
 - **0.4.0** - (Planned) Browser extension and advanced features
 - **1.0.0** - (Planned) Production-ready release with streaming integration
 
