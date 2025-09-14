@@ -40,7 +40,7 @@ jobs:
         python -c "import sys; sys.path.insert(0, 'src'); from models.database import Database; db = Database(':memory:'); db.initialize(); print('✓ Database works on ${{ matrix.os }}')"
 
         # Can users do basic operations?
-        python tests/quick_user_test.py
+        python tests/quick_user_workflow.py
 
     - name: Run minimal tests
       run: |
@@ -50,7 +50,7 @@ jobs:
     - name: Platform-specific checks
       run: |
         # Test platform-specific features work
-        python tests/platform_check.py
+        python tests/platform_validation.py
 
     - name: Summary
       if: always()
