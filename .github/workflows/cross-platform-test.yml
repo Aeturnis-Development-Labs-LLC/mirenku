@@ -40,21 +40,7 @@ jobs:
         python -c "import sys; sys.path.insert(0, 'src'); from models.database import Database; db = Database(':memory:'); db.initialize(); print('✓ Database works on ${{ matrix.os }}')"
 
         # Can users do basic operations?
-        python -c "
-import sys
-sys.path.insert(0, 'src')
-from models.database import Database
-from services.anime_service import AnimeService
-
-db = Database(':memory:')
-db.initialize()
-service = AnimeService(db)
-
-# Basic user operation
-anime_id = service.add_anime('Test Anime', status='Watching')
-anime = service.get_anime(anime_id)
-print(f'✓ Basic operations work on ${{ matrix.os }} with Python ${{ matrix.python-version }}')
-"
+        python tests/quick_user_test.py
 
     - name: Run minimal tests
       run: |
@@ -64,24 +50,7 @@ print(f'✓ Basic operations work on ${{ matrix.os }} with Python ${{ matrix.pyt
     - name: Platform-specific checks
       run: |
         # Test platform-specific features work
-        python -c "
-import sys
-import platform
-sys.path.insert(0, 'src')
-
-system = platform.system()
-print(f'✓ Running on {system}')
-
-# Test config paths work on this platform
-from utils.config import Config
-config = Config()
-db_path = config.get_db_path()
-print(f'✓ Config paths work: {db_path}')
-
-# Test that tkinter is available (but don't create windows)
-import tkinter
-print('✓ Tkinter available')
-"
+        python tests/platform_check.py
 
     - name: Summary
       if: always()
