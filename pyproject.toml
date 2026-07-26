@@ -1,6 +1,6 @@
 [project]
 name = "mirenku"
-version = "0.3.2"
+dynamic = ["version"]
 description = "A desktop application for tracking anime viewing progress"
 authors = [{name = "Aeturnis Development", email = "dev@mirenku.com"}]
 requires-python = ">=3.8"
@@ -9,15 +9,19 @@ readme = "README.md"
 keywords = ["anime", "tracker", "myanimelist", "mal", "desktop"]
 
 dependencies = [
-    "requests>=2.31.0",
-    "pillow>=10.0.0",
-    "pytz>=2023.3",
+    "requests>=2.32.3",
+    "pillow>=10.4.0",
     "cryptography>=41.0.0",
     "keyring>=24.0.0",
-    "watchdog>=3.0.0",
+    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
+# WIP scrobbling feature (off by default; slated for redesign)
+scrobbling = [
+    "websockets>=12.0",
+]
+
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
@@ -36,6 +40,12 @@ build = [
 [build-system]
 requires = ["setuptools>=68.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["src", "src.models", "src.services", "src.ui", "src.utils"]
+
+[tool.setuptools.dynamic]
+version = {attr = "src.__version__"}
 
 [tool.ruff]
 # Target Python 3.8+

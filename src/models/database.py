@@ -72,6 +72,10 @@ class Database:
         # Check if database needs initialization
         if self._needs_initialization():
             self._create_schema()
+            # The base schema predates v2: sync_status/last_mal_sync and the
+            # sync_queue table only exist in the v2 migration. Run it (it is
+            # idempotent) so fresh installs match upgraded ones.
+            self._migrate_to_v2()
             self._set_schema_version()
             logger.info("Database initialized with schema")
         else:

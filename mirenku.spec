@@ -9,6 +9,10 @@ block_cipher = None
 # Get the root directory
 ROOT_DIR = Path.cwd()
 
+# Read the version from the single source in src/__init__.py
+sys.path.insert(0, str(ROOT_DIR / 'src'))
+from __init__ import __version__ as APP_VERSION
+
 a = Analysis(
     ['src/main.py'],
     pathex=[str(ROOT_DIR / 'src')],
@@ -26,9 +30,7 @@ a = Analysis(
         'keyring',
         'keyring.backends',
         'keyring.backends.Windows',
-        'watchdog',
-        'watchdog.observers',
-        'watchdog.events',
+        'psutil',
     ],
     hookspath=[],
     hooksconfig={},
@@ -85,8 +87,8 @@ app = BUNDLE(
     icon=str(ROOT_DIR / 'assets' / 'mirenku.ico'),
     bundle_identifier='com.mirenku.tracker',
     info_plist={
-        'CFBundleShortVersionString': '0.3.2',
-        'CFBundleVersion': '0.3.2',
+        'CFBundleShortVersionString': APP_VERSION,
+        'CFBundleVersion': APP_VERSION,
         'NSHighResolutionCapable': 'True',
         'LSMinimumSystemVersion': '10.12.0',
     },

@@ -14,7 +14,12 @@ class Config:
 
     def __init__(self):
         self.app_name = "AnimeTracker"
-        self.version = "0.1.1"
+        try:
+            from __init__ import __version__
+
+            self.version = __version__
+        except ImportError:
+            self.version = "unknown"
 
         # Determine if running as frozen executable or script
         if getattr(sys, "frozen", False):

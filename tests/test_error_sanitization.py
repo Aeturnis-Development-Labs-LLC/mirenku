@@ -176,3 +176,43 @@ class TestErrorSanitization:
         # Should complete quickly (under 100ms for 1000 tokens)
         assert elapsed < 0.1
         assert "secret123" not in sanitized
+
+class TestSanitizingFilterIntegration:
+    """Regression (F3): the sanitizer must be wired into the live logging
+    pipeline, not just exist as an unused utility."""
+
+    def test_handler_filter_scrubs_secrets(self, tmp_path):
+        from utils.logging_config import SanitizingFilter
+
+        log_file = tmp_path / "test.log"
+        handler = logging.FileHandler(log_file, encoding="utf-8")
+        handler.addFilter(SanitizingFilter())
+
+        test_logger = logging.getLogger("test_sanitizing_filter")
+        test_logger.setLevel(logging.INFO)
+        test_logger.addHandler(handler)
+        try:
+            secret = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.super_secret"
+            test_logger.info(f"Auth failed with token: {secret}")
+        finally:
+            handler.close()
+            test_logger.removeHandler(handler)
+
+        content = log_file.read_text(encoding="utf-8")
+        assert "super_secret" not in content
+        assert "Auth failed" in content
+
+    def test_setup_logging_attaches_filter(self, tmp_path):
+        from utils.logging_config import SanitizingFilter, setup_logging
+
+        setup_logging(log_dir=tmp_path / "logs", log_level="INFO")
+        root = logging.getLogger()
+        try:
+            assert any(
+                any(isinstance(f, SanitizingFilter) for f in h.filters)
+                for h in root.handlers
+            )
+        finally:
+            for h in list(root.handlers):
+                h.close()
+                root.removeHandler(h)

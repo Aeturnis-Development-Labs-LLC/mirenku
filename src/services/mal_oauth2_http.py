@@ -217,9 +217,10 @@ class MALOAuth2HTTPClient:
                 self.REDIRECT_URI = redirect_uri
                 logger.info(f"Using port {port} for OAuth callback")
 
-            # Generate authorization URL
+            # Generate authorization URL. Never log it: MAL only supports
+            # PKCE "plain", so the embedded code_challenge IS the verifier.
             auth_url = self.get_authorization_url()
-            logger.info(f"Generated authorization URL: {auth_url}")
+            logger.info("Generated authorization URL")
 
             # Start HTTP server for callback
             logger.info(f"Starting OAuth callback server on port {port}")
@@ -230,7 +231,6 @@ class MALOAuth2HTTPClient:
 
             # Open browser for authorization
             logger.info("Opening browser for MAL authorization...")
-            logger.info(f"Full URL being opened: {auth_url}")
             webbrowser.open(auth_url)
 
             # Wait for callback (with timeout)
@@ -286,13 +286,7 @@ class MALOAuth2HTTPClient:
             True if successful
         """
         try:
-            logger.info(
-                f"Exchanging code of length {len(auth_code)}: {auth_code[:10]}... (truncated)"
-            )
-            logger.info(f"Using redirect_uri: {self.REDIRECT_URI}")
-            logger.info(
-                f"Using code_verifier of length {len(self.code_verifier)}: {self.code_verifier[:10]}... (truncated)"
-            )
+            logger.info("Exchanging authorization code for tokens")
 
             # Prepare token request
             data = {

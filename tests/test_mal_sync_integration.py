@@ -237,3 +237,70 @@ class TestMALSyncIntegration:
             request = call[0][0]
             assert 'Authorization' in request.headers
             assert 'Bearer' in request.headers['Authorization']
+
+
+class TestPullFromMALRealDatabase:
+    """Regression (F2b): pull_from_mal crashed with ImportError for any anime
+    not already in the local database ('repositories' package does not exist),
+    and the create path called a nonexistent repo.add()."""
+
+    @pytest.fixture
+    def real_db(self, tmp_path):
+        from models.database import Database
+        db = Database(tmp_path / "anime_tracker.db")
+        db.initialize()
+        yield db
+        db.disconnect()
+
+    @pytest.fixture
+    def sync_service_real_db(self, real_db):
+        from services.sync_service import SyncService
+        mal_api = Mock()
+        mal_api.sync_anime_to_local.return_value = {
+            "title": "Novel Anime",
+            "status": "Watching",
+            "episodes_watched": 3,
+            "total_episodes": 12,
+            "score": 8,
+            "synopsis": "A show we have never seen locally.",
+            "genres": ["Action"],
+            "studio": "Test Studio",
+            "image_url": None,
+            "notes": None,
+        }
+        oauth = Mock()
+        oauth.is_authenticated.return_value = True
+        return SyncService(
+            database=real_db,
+            mal_api_v2_service=mal_api,
+            oauth_client=oauth,
+        )
+
+    def test_pull_creates_novel_anime(self, sync_service_real_db, real_db):
+        """Pulling an anime with no local row must create it, not crash"""
+        result = sync_service_real_db.pull_from_mal(99999)
+
+        assert result is True
+        row = real_db.fetchone("SELECT * FROM anime WHERE mal_id = ?", (99999,))
+        assert row is not None
+        assert row["title"] == "Novel Anime"
+        assert row["episodes_watched"] == 3
+        assert row["sync_status"] == "synced"
+        assert row["last_mal_sync"] is not None
+
+    def test_pull_updates_existing_anime(self, sync_service_real_db, real_db):
+        """Pulling an anime that exists locally must update in place"""
+        with real_db.get_cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO anime (title, status, episodes_watched, mal_id) "
+                "VALUES (?, ?, ?, ?)",
+                ("Old Title", "Watching", 1, 99999),
+            )
+
+        result = sync_service_real_db.pull_from_mal(99999)
+
+        assert result is True
+        rows = real_db.fetchall("SELECT * FROM anime WHERE mal_id = ?", (99999,))
+        assert len(rows) == 1
+        assert rows[0]["title"] == "Novel Anime"
+        assert rows[0]["episodes_watched"] == 3

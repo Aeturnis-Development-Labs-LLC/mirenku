@@ -108,12 +108,13 @@ mirenku_v*.zip
 mirenku_v*.sha256
 *.exe
 
-# Development/Debug files
+# Development/Debug files (root-level scratch scripts only —
+# NEVER ignore tests/: a bare test_*.py silently drops new test files)
 clear_tokens.py
 diagnose_oauth.py
 sync_test.log
-*_test.py
-test_*.py
+/*_test.py
+/test_*.py
 
 # Linting and formatting
 .ruff_cache/

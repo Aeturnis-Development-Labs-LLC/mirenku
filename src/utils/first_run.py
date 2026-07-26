@@ -11,8 +11,11 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# Version constant
-APP_VERSION = "0.3.0"
+# Version comes from the single source in src/__init__.py
+try:
+    from __init__ import __version__ as APP_VERSION
+except ImportError:
+    APP_VERSION = "unknown"
 
 
 class FirstRunManager:

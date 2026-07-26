@@ -27,7 +27,7 @@ from utils.persistence import PersistenceManager
 try:
     from __init__ import __version__
 except ImportError:
-    __version__ = "0.3.1"
+    __version__ = "unknown"
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ class MainWindow:
         setup_global_exception_handler(self.error_handler)
 
         # Set up database watcher for auto-refresh
-        db_path = self.config.get_data_directory() / "anime.db"
+        db_path = self.config.get_db_path()
         self.db_watcher = SmartDatabaseWatcher(
             db_path=db_path,
             callback=self._on_database_change,
@@ -1047,11 +1047,11 @@ Added This Week: {stats.get('added_this_week', 0)}"""
                         "3. Port 8888 is not blocked",
                     ),
                 )
-        except Exception:
+        except Exception as e:
             self.root.after(
                 0,
-                lambda: messagebox.showerror(
-                    "Authentication Error", f"An error occurred during authentication:\n{e!s}"
+                lambda msg=str(e): messagebox.showerror(
+                    "Authentication Error", f"An error occurred during authentication:\n{msg}"
                 ),
             )
 
