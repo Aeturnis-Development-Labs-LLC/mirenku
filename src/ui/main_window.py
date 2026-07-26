@@ -54,6 +54,12 @@ class MainWindow:
         self.mal_api_v2_service = context.mal_api_v2_service
         self.sync_service = context.sync_service
 
+        # Sync orchestration lives in the controller; this window only
+        # displays outcomes
+        from services.sync_controller import SyncController
+
+        self.sync_controller = SyncController(root, context.sync_service)
+
         # Set up notification system
         self.notifications = NotificationManager(root)
         self.error_handler = ErrorHandler(self.notifications)
@@ -1103,97 +1109,31 @@ Added This Week: {stats.get('added_this_week', 0)}"""
             sync_type = dialog.result.get("type")
             self.notifications.show(f"Starting {sync_type} sync...", level="info")
 
-            # Perform sync in background
-            import threading
-
-            thread = threading.Thread(target=self._perform_sync, args=(sync_type,))
-            thread.daemon = True
-            thread.start()
-
-    def _perform_sync(self, sync_type: str):
-        """Perform sync operation in background
-
-        Args:
-            sync_type: Type of sync (push, pull, full)
-        """
-        try:
-            # Database hands out per-thread connections, so the shared sync
-            # service is safe to use from this worker thread directly
-            thread_sync = self.sync_service
-            thread_sync.refresh_authentication()
-
-            all_errors = []
-
-            if sync_type == "push":
-                # Push local changes to MAL
-                success, failed, errors = thread_sync.process_sync_queue()
-
-                self.root.after(
-                    0,
-                    lambda: self.notifications.show(
-                        f"Push complete: {success} succeeded, {failed} failed",
-                        level="success" if failed == 0 else "warning",
-                    ),
-                )
-                all_errors.extend(errors)
-
-            elif sync_type == "pull":
-                # Pull from MAL
-                added, updated, errors = thread_sync.full_sync_from_mal()
-
-                self.root.after(
-                    0,
-                    lambda: self.notifications.show(
-                        f"Pull complete: {added} added, {updated} updated", level="success"
-                    ),
-                )
-                all_errors.extend(errors)
-
-                # Refresh list
-                self.root.after(0, self.refresh_list)
-
-            elif sync_type == "full":
-                # Full bidirectional sync
-                # First push local changes
-                push_success, push_failed, push_errors = thread_sync.process_sync_queue()
-
-                # Then pull from MAL
-                added, updated, pull_errors = thread_sync.full_sync_from_mal()
-
-                self.root.after(
-                    0,
-                    lambda: self.notifications.show(
-                        f"Full sync complete: {push_success} pushed, {added} added, {updated} updated",
-                        level="success",
-                    ),
-                )
-
-                all_errors.extend(push_errors)
-                all_errors.extend(pull_errors)
-
-                # Refresh list
-                self.root.after(0, self.refresh_list)
-
-            # Show errors if any
-            if all_errors:
-                error_msg = "\n".join(all_errors[:5])  # Show first 5 errors
-                if len(all_errors) > 5:
-                    error_msg += f"\n... and {len(all_errors) - 5} more"
-
-                self.root.after(
-                    0,
-                    lambda: messagebox.showwarning(
-                        "Sync Warnings", f"Some items could not be synced:\n\n{error_msg}"
-                    ),
-                )
-
-        except Exception as e:
-            logger.error(f"Sync failed: {e}")
-            error_msg = str(e)
-            self.root.after(
-                0,
-                lambda: messagebox.showerror("Sync Failed", f"Sync operation failed:\n{error_msg}"),
+            self.sync_controller.run(
+                sync_type,
+                on_complete=self._on_sync_complete,
+                on_error=self._on_sync_error,
             )
+
+    def _on_sync_complete(self, outcome):
+        """Display a finished sync's outcome (main thread)"""
+        self.notifications.show(outcome.message, level=outcome.level)
+
+        if outcome.list_changed:
+            self.refresh_list()
+
+        if outcome.errors:
+            error_msg = "\n".join(outcome.errors[:5])  # Show first 5 errors
+            if len(outcome.errors) > 5:
+                error_msg += f"\n... and {len(outcome.errors) - 5} more"
+            messagebox.showwarning(
+                "Sync Warnings", f"Some items could not be synced:\n\n{error_msg}"
+            )
+
+    def _on_sync_error(self, error: Exception):
+        """Display a failed sync (main thread)"""
+        logger.error(f"Sync failed: {error}")
+        messagebox.showerror("Sync Failed", f"Sync operation failed:\n{error!s}")
 
     def show_settings(self):
         """Show settings dialog"""
