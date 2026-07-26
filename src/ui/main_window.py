@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models.anime import Anime
 from ui.dialogs import AddAnimeDialog, EditAnimeDialog
+from ui.theme import apply_theme
 from utils.database_watcher import SmartDatabaseWatcher
 from utils.worker import run_async
 from utils.notifications import (
@@ -98,68 +99,8 @@ class MainWindow:
         self.current_filter = tk.StringVar(value=window_state["filter"])
         self.search_var = tk.StringVar()
 
-        # Configure styles with Mirenku colors and fonts
-        style = ttk.Style()
-
-        # Define Mirenku color palette
-        MIRENKU_TEAL = "#2dd4bf"
-        MIRENKU_TEAL_LIGHT = "#e6fffa"
-        MIRENKU_TEAL_DARK = "#0d9488"
-
-        # Define Mirenku fonts - clean, straightforward, no gimmicks
-        import platform
-
-        system = platform.system()
-
-        if system == "Windows":
-            # Windows: Use Segoe UI for UI, Consolas for data
-            UI_FONT = ("Segoe UI", 9)
-            UI_FONT_BOLD = ("Segoe UI", 9, "bold")
-            DATA_FONT = ("Consolas", 9)
-            HEADING_FONT = ("Segoe UI", 10, "bold")
-        elif system == "Darwin":  # macOS
-            UI_FONT = ("SF Pro Text", 9)
-            UI_FONT_BOLD = ("SF Pro Text", 9, "bold")
-            DATA_FONT = ("SF Mono", 9)
-            HEADING_FONT = ("SF Pro Display", 10, "bold")
-        else:  # Linux and others
-            UI_FONT = ("Noto Sans", 9)
-            UI_FONT_BOLD = ("Noto Sans", 9, "bold")
-            DATA_FONT = ("Roboto Mono", 9)
-            HEADING_FONT = ("Noto Sans", 10, "bold")
-
-        # Apply fonts to default widgets
-        self.root.option_add("*Font", UI_FONT)
-        self.root.option_add("*Menu.Font", UI_FONT)
-        self.root.option_add("*Menubutton.Font", UI_FONT)
-
-        # Configure button styles
-        style.configure(
-            "TButton", font=UI_FONT, borderwidth=1, relief="flat", background=MIRENKU_TEAL_LIGHT
-        )
-        style.map("TButton", background=[("active", MIRENKU_TEAL), ("pressed", MIRENKU_TEAL_DARK)])
-
-        # Configure frame styles
-        style.configure("TFrame", background="white")
-        style.configure("TLabelFrame", background="white", font=UI_FONT_BOLD)
-
-        # Configure label styles
-        style.configure("TLabel", background="white", font=UI_FONT)
-        style.configure("Heading.TLabel", font=HEADING_FONT)
-
-        # Configure entry styles
-        style.configure("TEntry", font=UI_FONT)
-
-        # Configure combobox styles
-        style.configure("TCombobox", font=UI_FONT)
-
-        # Store fonts for later use
-        self.fonts = {
-            "ui": UI_FONT,
-            "ui_bold": UI_FONT_BOLD,
-            "data": DATA_FONT,
-            "heading": HEADING_FONT,
-        }
+        # Apply theme (colors, fonts, ttk styles live in ui/theme.py)
+        self.fonts = apply_theme(self.root)
 
         # Setup UI
         self._create_menu()
