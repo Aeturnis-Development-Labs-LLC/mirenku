@@ -1151,17 +1151,9 @@ Added This Week: {stats.get('added_this_week', 0)}"""
             sync_type: Type of sync (push, pull, full)
         """
         try:
-            # Create new database connection for this thread
-            from models.database import Database
-
-            thread_db = Database(str(self.config.db_path))
-
-            # Create new sync service with thread-safe database
-            from services.sync_service import SyncService
-
-            thread_sync = SyncService(
-                thread_db, self.mal_api_v2_service, self.mal_auth_manager.oauth_client
-            )
+            # Database hands out per-thread connections, so the shared sync
+            # service is safe to use from this worker thread directly
+            thread_sync = self.sync_service
             thread_sync.refresh_authentication()
 
             all_errors = []
