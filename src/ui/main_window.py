@@ -10,11 +10,10 @@ from tkinter import Menu, messagebox, ttk
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models.anime import Anime
-from models.database import Database
-from services.anime_service import AnimeService
 from ui.dialogs import AddAnimeDialog, EditAnimeDialog
-from utils.config import Config
+from ui.theme import apply_theme
 from utils.database_watcher import SmartDatabaseWatcher
+from utils.worker import run_async
 from utils.notifications import (
     ErrorHandler,
     NotificationLevel,
@@ -35,66 +34,32 @@ logger = logging.getLogger(__name__)
 class MainWindow:
     """Main application window"""
 
-    def __init__(self, root: tk.Tk, database: Database):
+    def __init__(self, root: tk.Tk, context: "AppContext"):
         """Initialize main window
 
         Args:
             root: Tkinter root window
-            database: Database instance
+            context: Fully-built application context (composition root lives
+                in app_context.py, not here)
         """
         self.root = root
-        self.db = database
-        self.service = AnimeService(database)
-        self.config = Config()
-        self.persistence = PersistenceManager(self.config, database)
+        self.context = context
+        self.db = context.db
+        self.service = context.anime_service
+        self.config = context.config
+        self.persistence = context.persistence
+        self.mal_service = context.mal_service
+        self.image_service = context.image_service
+        self.mal_auth_manager = context.mal_auth_manager
+        self.scrobbling_manager = context.scrobbling_manager
+        self.mal_api_v2_service = context.mal_api_v2_service
+        self.sync_service = context.sync_service
 
-        # Set up MAL service
-        from services.mal_service import MALService
+        # Sync orchestration lives in the controller; this window only
+        # displays outcomes
+        from services.sync_controller import SyncController
 
-        cache_dir = self.config.get_data_directory() / "mal_cache"
-        self.mal_service = MALService(cache_dir)
-
-        # Set up image service
-        from services.image_service import ImageService
-
-        image_cache_dir = self.config.get_data_directory() / "image_cache"
-        self.image_service = ImageService(image_cache_dir)
-
-        # Set up MAL OAuth2 authentication (Phase 3)
-        from ui.mal_auth_dialog import MALAuthManager
-
-        self.mal_auth_manager = MALAuthManager(
-            self.config.get_data_directory()
-            # Client ID is embedded in the application
-        )
-
-        # Set up ScrobblingManager for WebSocket server (v0.4.0)
-        try:
-            from services.scrobbling_manager import ScrobblingManager
-            self.scrobbling_manager = ScrobblingManager(self.service, self.config)
-            # Start server if enabled
-            self.scrobbling_manager.start()
-        except Exception as e:
-            logger.warning(f"Failed to initialize ScrobblingManager: {e}")
-            self.scrobbling_manager = None
-
-        # Set up MAL API v2 service if authenticated (silent check at startup)
-        self.mal_api_v2_service = None
-        if self.mal_auth_manager.is_authenticated(silent=True):
-            from services.mal_api_v2_service import MALAPIv2Service
-
-            self.mal_api_v2_service = MALAPIv2Service(self.mal_auth_manager.oauth_client)
-
-        # Set up sync service (Phase 3 functionality)
-        from services.sync_service import SyncService
-
-        self.sync_service = SyncService(
-            database,
-            self.mal_api_v2_service,
-            self.mal_auth_manager.oauth_client
-            if hasattr(self.mal_auth_manager, "oauth_client")
-            else None,
-        )
+        self.sync_controller = SyncController(root, context.sync_service)
 
         # Set up notification system
         self.notifications = NotificationManager(root)
@@ -134,68 +99,8 @@ class MainWindow:
         self.current_filter = tk.StringVar(value=window_state["filter"])
         self.search_var = tk.StringVar()
 
-        # Configure styles with Mirenku colors and fonts
-        style = ttk.Style()
-
-        # Define Mirenku color palette
-        MIRENKU_TEAL = "#2dd4bf"
-        MIRENKU_TEAL_LIGHT = "#e6fffa"
-        MIRENKU_TEAL_DARK = "#0d9488"
-
-        # Define Mirenku fonts - clean, straightforward, no gimmicks
-        import platform
-
-        system = platform.system()
-
-        if system == "Windows":
-            # Windows: Use Segoe UI for UI, Consolas for data
-            UI_FONT = ("Segoe UI", 9)
-            UI_FONT_BOLD = ("Segoe UI", 9, "bold")
-            DATA_FONT = ("Consolas", 9)
-            HEADING_FONT = ("Segoe UI", 10, "bold")
-        elif system == "Darwin":  # macOS
-            UI_FONT = ("SF Pro Text", 9)
-            UI_FONT_BOLD = ("SF Pro Text", 9, "bold")
-            DATA_FONT = ("SF Mono", 9)
-            HEADING_FONT = ("SF Pro Display", 10, "bold")
-        else:  # Linux and others
-            UI_FONT = ("Noto Sans", 9)
-            UI_FONT_BOLD = ("Noto Sans", 9, "bold")
-            DATA_FONT = ("Roboto Mono", 9)
-            HEADING_FONT = ("Noto Sans", 10, "bold")
-
-        # Apply fonts to default widgets
-        self.root.option_add("*Font", UI_FONT)
-        self.root.option_add("*Menu.Font", UI_FONT)
-        self.root.option_add("*Menubutton.Font", UI_FONT)
-
-        # Configure button styles
-        style.configure(
-            "TButton", font=UI_FONT, borderwidth=1, relief="flat", background=MIRENKU_TEAL_LIGHT
-        )
-        style.map("TButton", background=[("active", MIRENKU_TEAL), ("pressed", MIRENKU_TEAL_DARK)])
-
-        # Configure frame styles
-        style.configure("TFrame", background="white")
-        style.configure("TLabelFrame", background="white", font=UI_FONT_BOLD)
-
-        # Configure label styles
-        style.configure("TLabel", background="white", font=UI_FONT)
-        style.configure("Heading.TLabel", font=HEADING_FONT)
-
-        # Configure entry styles
-        style.configure("TEntry", font=UI_FONT)
-
-        # Configure combobox styles
-        style.configure("TCombobox", font=UI_FONT)
-
-        # Store fonts for later use
-        self.fonts = {
-            "ui": UI_FONT,
-            "ui_bold": UI_FONT_BOLD,
-            "data": DATA_FONT,
-            "heading": HEADING_FONT,
-        }
+        # Apply theme (colors, fonts, ttk styles live in ui/theme.py)
+        self.fonts = apply_theme(self.root)
 
         # Setup UI
         self._create_menu()
@@ -893,73 +798,71 @@ Added This Week: {stats.get('added_this_week', 0)}"""
         # Show progress
         self.notifications.show("Importing from MAL...", level="info")
 
-        # Import in background thread
-        import threading
+        run_async(
+            self.root,
+            lambda: self._fetch_mal_user_list(username),
+            on_done=lambda result: self._on_mal_user_list_fetched(username, result),
+            on_error=lambda e: messagebox.showerror(
+                "Import Failed", f"Failed to import from MAL: {e!s}"
+            ),
+            name="mal-import",
+        )
 
-        thread = threading.Thread(target=self._import_mal_user_thread, args=(username,))
-        thread.daemon = True
-        thread.start()
+    def _fetch_mal_user_list(self, username: str):
+        """Fetch and normalize a MAL user's list (worker thread; no UI)"""
+        anime_list = self.mal_service.get_user_animelist(username)
 
-    def _import_mal_user_thread(self, username: str):
-        """Background thread for importing MAL user list"""
-        try:
-            # Get user's anime list
-            anime_list = self.mal_service.get_user_animelist(username)
+        if not anime_list:
+            return None
 
-            if not anime_list:
-                self.root.after(
-                    0,
-                    lambda: messagebox.showinfo(
-                        "No Anime Found",
-                        f"No anime found for user '{username}'.\nThe list may be private or the username may be incorrect.",
-                    ),
-                )
-                return
+        # Prepare anime data for preview
+        processed_list = []
+        for mal_anime in anime_list:
+            anime_data = mal_anime.get("anime", {})
 
-            # Prepare anime data for preview
-            processed_list = []
-            for mal_anime in anime_list:
-                anime_data = mal_anime.get("anime", {})
+            # Combine data from list and anime info
+            combined = {
+                "mal_id": anime_data.get("mal_id"),
+                "title": anime_data.get("title", "Unknown"),
+                "title_english": anime_data.get("title_english"),
+                "title_japanese": anime_data.get("title_japanese"),
+                "episodes": anime_data.get("episodes"),
+                "num_episodes_watched": mal_anime.get("episodes_watched", 0),
+                "score": mal_anime.get("score"),
+                "watching_status": mal_anime.get("watching_status"),
+                "synopsis": anime_data.get("synopsis"),
+                "images": anime_data.get("images", {}),
+                "genres": anime_data.get("genres", []),
+                "studios": anime_data.get("studios", []),
+            }
 
-                # Combine data from list and anime info
-                combined = {
-                    "mal_id": anime_data.get("mal_id"),
-                    "title": anime_data.get("title", "Unknown"),
-                    "title_english": anime_data.get("title_english"),
-                    "title_japanese": anime_data.get("title_japanese"),
-                    "episodes": anime_data.get("episodes"),
-                    "num_episodes_watched": mal_anime.get("episodes_watched", 0),
-                    "score": mal_anime.get("score"),
-                    "watching_status": mal_anime.get("watching_status"),
-                    "synopsis": anime_data.get("synopsis"),
-                    "images": anime_data.get("images", {}),
-                    "genres": anime_data.get("genres", []),
-                    "studios": anime_data.get("studios", []),
-                }
-
-                # Map MAL status to readable format
-                status_map = {
-                    1: "watching",
-                    2: "completed",
-                    3: "on_hold",
-                    4: "dropped",
-                    6: "plan_to_watch",
-                }
-                combined["watching_status"] = status_map.get(
-                    mal_anime.get("watching_status"), "unknown"
-                )
-
-                processed_list.append(combined)
-
-            # Show preview dialog on main thread
-            self.root.after(0, lambda: self._show_import_preview(processed_list))
-
-        except Exception as e:
-            logger.error(f"Import failed: {e}")
-            self.root.after(
-                0,
-                lambda: messagebox.showerror("Import Failed", f"Failed to import from MAL: {e!s}"),
+            # Map MAL status to readable format
+            status_map = {
+                1: "watching",
+                2: "completed",
+                3: "on_hold",
+                4: "dropped",
+                6: "plan_to_watch",
+            }
+            combined["watching_status"] = status_map.get(
+                mal_anime.get("watching_status"), "unknown"
             )
+
+            processed_list.append(combined)
+
+        return processed_list
+
+    def _on_mal_user_list_fetched(self, username: str, processed_list):
+        """Show import preview or a not-found notice (main thread)"""
+        if processed_list is None:
+            messagebox.showinfo(
+                "No Anime Found",
+                f"No anime found for user '{username}'.\n"
+                "The list may be private or the username may be incorrect.",
+            )
+            return
+
+        self._show_import_preview(processed_list)
 
     def _show_import_preview(self, anime_list):
         """Show import preview dialog"""
@@ -980,24 +883,41 @@ Added This Week: {stats.get('added_this_week', 0)}"""
         messagebox.showinfo("Import Complete", message)
 
     def update_mal_status(self):
-        """Update MAL connection status in UI"""
-        # Check OAuth authentication status
-        if self.mal_auth_manager.is_authenticated():
+        """Update MAL connection status in UI.
+
+        The check runs on a worker thread: is_authenticated() may perform a
+        synchronous network token refresh, which must never block the Tk
+        main thread (it froze the UI on every 30s poll).
+        """
+
+        def check():
+            return (
+                self.mal_auth_manager.is_authenticated(),
+                self.sync_service.get_sync_queue_count(),
+            )
+
+        run_async(
+            self.root,
+            check,
+            on_done=self._apply_mal_status,
+            on_error=lambda e: self.root.after(30000, self.update_mal_status),
+            name="mal-status",
+        )
+
+    def _apply_mal_status(self, status):
+        """Apply polled MAL status to widgets (main thread)"""
+        is_authenticated, queue_count = status
+
+        if is_authenticated:
             self.mal_status_label.config(text="MAL: ✓", foreground="green")
-        else:
-            self.mal_status_label.config(text="MAL: ✗", foreground="red")
-
-        # Update sync queue count
-        queue_count = self.sync_service.get_sync_queue_count()
-        self.sync_queue_label.config(text=f"Queue: {queue_count}")
-
-        # Update sync button state based on authentication
-        if self.mal_auth_manager.is_authenticated():
             self.sync_button.config(state="normal")
             self.sync_status_label.config(text="Ready", foreground="green")
         else:
+            self.mal_status_label.config(text="MAL: ✗", foreground="red")
             self.sync_button.config(state="disabled")
             self.sync_status_label.config(text="Not Connected", foreground="gray")
+
+        self.sync_queue_label.config(text=f"Queue: {queue_count}")
 
         # Schedule next update in 30 seconds
         self.root.after(30000, self.update_mal_status)
@@ -1020,40 +940,33 @@ Added This Week: {stats.get('added_this_week', 0)}"""
             # Not connected, start authentication
             self.notifications.show("Opening browser for MAL authentication...", level="info")
 
-            # Start authentication in background thread
-            import threading
-
-            thread = threading.Thread(target=self._perform_mal_auth)
-            thread.daemon = True
-            thread.start()
-
-    def _perform_mal_auth(self):
-        """Perform MAL authentication in background"""
-        try:
-            success = self.mal_auth_manager.oauth_client.authorize()
-
-            if success:
-                # Update UI on main thread
-                self.root.after(0, self._mal_auth_success)
-            else:
-                self.root.after(
-                    0,
-                    lambda: messagebox.showerror(
-                        "Authentication Failed",
-                        "Failed to authenticate with MyAnimeList.\n\n"
-                        "Please make sure:\n"
-                        "1. You're logged in to MyAnimeList\n"
-                        "2. You authorized the application\n"
-                        "3. Port 8888 is not blocked",
-                    ),
-                )
-        except Exception as e:
-            self.root.after(
-                0,
-                lambda msg=str(e): messagebox.showerror(
-                    "Authentication Error", f"An error occurred during authentication:\n{msg}"
-                ),
+            run_async(
+                self.root,
+                self.mal_auth_manager.oauth_client.authorize,
+                on_done=self._on_mal_auth_result,
+                on_error=self._on_mal_auth_error,
+                name="mal-auth",
             )
+
+    def _on_mal_auth_result(self, success: bool):
+        """Handle auth outcome (main thread)"""
+        if success:
+            self._mal_auth_success()
+        else:
+            messagebox.showerror(
+                "Authentication Failed",
+                "Failed to authenticate with MyAnimeList.\n\n"
+                "Please make sure:\n"
+                "1. You're logged in to MyAnimeList\n"
+                "2. You authorized the application\n"
+                "3. Port 8888 is not blocked",
+            )
+
+    def _on_mal_auth_error(self, error: Exception):
+        """Handle auth exception (main thread)"""
+        messagebox.showerror(
+            "Authentication Error", f"An error occurred during authentication:\n{error!s}"
+        )
 
     def _mal_auth_success(self):
         """Handle successful MAL authentication"""
@@ -1137,105 +1050,31 @@ Added This Week: {stats.get('added_this_week', 0)}"""
             sync_type = dialog.result.get("type")
             self.notifications.show(f"Starting {sync_type} sync...", level="info")
 
-            # Perform sync in background
-            import threading
-
-            thread = threading.Thread(target=self._perform_sync, args=(sync_type,))
-            thread.daemon = True
-            thread.start()
-
-    def _perform_sync(self, sync_type: str):
-        """Perform sync operation in background
-
-        Args:
-            sync_type: Type of sync (push, pull, full)
-        """
-        try:
-            # Create new database connection for this thread
-            from models.database import Database
-
-            thread_db = Database(str(self.config.db_path))
-
-            # Create new sync service with thread-safe database
-            from services.sync_service import SyncService
-
-            thread_sync = SyncService(
-                thread_db, self.mal_api_v2_service, self.mal_auth_manager.oauth_client
+            self.sync_controller.run(
+                sync_type,
+                on_complete=self._on_sync_complete,
+                on_error=self._on_sync_error,
             )
-            thread_sync.refresh_authentication()
 
-            all_errors = []
+    def _on_sync_complete(self, outcome):
+        """Display a finished sync's outcome (main thread)"""
+        self.notifications.show(outcome.message, level=outcome.level)
 
-            if sync_type == "push":
-                # Push local changes to MAL
-                success, failed, errors = thread_sync.process_sync_queue()
+        if outcome.list_changed:
+            self.refresh_list()
 
-                self.root.after(
-                    0,
-                    lambda: self.notifications.show(
-                        f"Push complete: {success} succeeded, {failed} failed",
-                        level="success" if failed == 0 else "warning",
-                    ),
-                )
-                all_errors.extend(errors)
-
-            elif sync_type == "pull":
-                # Pull from MAL
-                added, updated, errors = thread_sync.full_sync_from_mal()
-
-                self.root.after(
-                    0,
-                    lambda: self.notifications.show(
-                        f"Pull complete: {added} added, {updated} updated", level="success"
-                    ),
-                )
-                all_errors.extend(errors)
-
-                # Refresh list
-                self.root.after(0, self.refresh_list)
-
-            elif sync_type == "full":
-                # Full bidirectional sync
-                # First push local changes
-                push_success, push_failed, push_errors = thread_sync.process_sync_queue()
-
-                # Then pull from MAL
-                added, updated, pull_errors = thread_sync.full_sync_from_mal()
-
-                self.root.after(
-                    0,
-                    lambda: self.notifications.show(
-                        f"Full sync complete: {push_success} pushed, {added} added, {updated} updated",
-                        level="success",
-                    ),
-                )
-
-                all_errors.extend(push_errors)
-                all_errors.extend(pull_errors)
-
-                # Refresh list
-                self.root.after(0, self.refresh_list)
-
-            # Show errors if any
-            if all_errors:
-                error_msg = "\n".join(all_errors[:5])  # Show first 5 errors
-                if len(all_errors) > 5:
-                    error_msg += f"\n... and {len(all_errors) - 5} more"
-
-                self.root.after(
-                    0,
-                    lambda: messagebox.showwarning(
-                        "Sync Warnings", f"Some items could not be synced:\n\n{error_msg}"
-                    ),
-                )
-
-        except Exception as e:
-            logger.error(f"Sync failed: {e}")
-            error_msg = str(e)
-            self.root.after(
-                0,
-                lambda: messagebox.showerror("Sync Failed", f"Sync operation failed:\n{error_msg}"),
+        if outcome.errors:
+            error_msg = "\n".join(outcome.errors[:5])  # Show first 5 errors
+            if len(outcome.errors) > 5:
+                error_msg += f"\n... and {len(outcome.errors) - 5} more"
+            messagebox.showwarning(
+                "Sync Warnings", f"Some items could not be synced:\n\n{error_msg}"
             )
+
+    def _on_sync_error(self, error: Exception):
+        """Display a failed sync (main thread)"""
+        logger.error(f"Sync failed: {error}")
+        messagebox.showerror("Sync Failed", f"Sync operation failed:\n{error!s}")
 
     def show_settings(self):
         """Show settings dialog"""

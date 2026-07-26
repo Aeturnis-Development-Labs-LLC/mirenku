@@ -2,6 +2,7 @@
 
 import logging
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -10,42 +11,60 @@ logger = logging.getLogger(__name__)
 
 
 class Database:
-    """Manages SQLite database connection and operations"""
+    """Manages SQLite database access with one connection per thread.
+
+    sqlite3 connections cannot be shared across threads. Each thread that
+    touches this Database transparently gets its own connection, so services
+    can be called from worker threads without per-call-site workarounds.
+    """
 
     SCHEMA_VERSION = 2
 
     def __init__(self, db_path: Path):
-        """Initialize database connection
+        """Initialize database
 
         Args:
             db_path: Path to the SQLite database file
         """
         self.db_path = db_path
-        self.connection: Optional[sqlite3.Connection] = None
+        self._local = threading.local()
+
+    @property
+    def connection(self) -> Optional[sqlite3.Connection]:
+        """The current thread's connection, or None if not connected"""
+        return getattr(self._local, "connection", None)
 
     def connect(self):
-        """Establish database connection"""
+        """Establish a database connection for the current thread"""
         try:
-            self.connection = sqlite3.connect(
+            connection = sqlite3.connect(
                 str(self.db_path), detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
             )
-            self.connection.row_factory = sqlite3.Row
-            self.connection.execute("PRAGMA foreign_keys = ON")
-            logger.info(f"Connected to database: {self.db_path}")
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+            self._local.connection = connection
+            logger.info(
+                f"Connected to database: {self.db_path} "
+                f"(thread {threading.current_thread().name})"
+            )
         except sqlite3.Error as e:
             logger.error(f"Failed to connect to database: {e}")
             raise
 
     def disconnect(self):
-        """Close database connection"""
+        """Close the current thread's database connection.
+
+        Connections belonging to other threads close when their thread's
+        Database usage is released (sqlite3 forbids cross-thread close).
+        """
         if self.connection:
             self.connection.close()
-            self.connection = None
+            self._local.connection = None
             logger.info("Disconnected from database")
 
     @contextmanager
     def get_cursor(self):
-        """Context manager for database cursor
+        """Context manager for a cursor on the current thread's connection
 
         Yields:
             sqlite3.Cursor: Database cursor
@@ -53,12 +72,13 @@ class Database:
         if not self.connection:
             self.connect()
 
-        cursor = self.connection.cursor()
+        connection = self.connection
+        cursor = connection.cursor()
         try:
             yield cursor
-            self.connection.commit()
+            connection.commit()
         except sqlite3.Error as e:
-            self.connection.rollback()
+            connection.rollback()
             logger.error(f"Database error: {e}")
             raise
         finally:
@@ -289,37 +309,6 @@ class Database:
             )
 
             logger.info("Schema migration to v2 completed")
-
-    def execute(self, query: str, params: Optional[Tuple] = None) -> sqlite3.Cursor:
-        """Execute a query
-
-        Args:
-            query: SQL query to execute
-            params: Query parameters
-
-        Returns:
-            sqlite3.Cursor: Query cursor
-        """
-        with self.get_cursor() as cursor:
-            if params:
-                cursor.execute(query, params)
-            else:
-                cursor.execute(query)
-            return cursor
-
-    def executemany(self, query: str, params: List[Tuple]) -> sqlite3.Cursor:
-        """Execute a query with multiple parameter sets
-
-        Args:
-            query: SQL query to execute
-            params: List of parameter tuples
-
-        Returns:
-            sqlite3.Cursor: Query cursor
-        """
-        with self.get_cursor() as cursor:
-            cursor.executemany(query, params)
-            return cursor
 
     def fetchone(self, query: str, params: Optional[Tuple] = None) -> Optional[sqlite3.Row]:
         """Fetch one result

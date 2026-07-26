@@ -228,3 +228,71 @@ class TestAnimeModel(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class TestPerThreadConnections:
+    """Regression (R2a): Database must hand out one connection per thread so
+    services can be shared across threads. The old single shared connection
+    raised sqlite3.ProgrammingError from any worker thread."""
+
+    def test_worker_thread_can_use_same_database(self, tmp_path):
+        import threading
+        from models.database import Database
+
+        db = Database(tmp_path / "anime_tracker.db")
+        db.initialize()
+
+        with db.get_cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO anime (title, status) VALUES (?, ?)",
+                ("Main Thread Anime", "Watching"),
+            )
+
+        results = {}
+
+        def worker():
+            try:
+                row = db.fetchone("SELECT COUNT(*) as c FROM anime")
+                results["count"] = row["c"]
+                with db.get_cursor() as cursor:
+                    cursor.execute(
+                        "INSERT INTO anime (title, status) VALUES (?, ?)",
+                        ("Worker Thread Anime", "Completed"),
+                    )
+                results["ok"] = True
+            except Exception as e:
+                results["error"] = repr(e)
+
+        t = threading.Thread(target=worker)
+        t.start()
+        t.join(timeout=10)
+
+        assert results.get("error") is None
+        assert results.get("ok") is True
+        assert results["count"] == 1
+        # Main thread sees the worker's committed write
+        assert db.fetchone("SELECT COUNT(*) as c FROM anime")["c"] == 2
+
+        db.disconnect()
+
+    def test_connections_are_distinct_per_thread(self, tmp_path):
+        import threading
+        from models.database import Database
+
+        db = Database(tmp_path / "anime_tracker.db")
+        db.initialize()
+        main_conn = db.connection
+
+        seen = {}
+
+        def worker():
+            db.fetchone("SELECT 1")
+            seen["conn"] = db.connection
+
+        t = threading.Thread(target=worker)
+        t.start()
+        t.join(timeout=10)
+
+        assert seen["conn"] is not None
+        assert seen["conn"] is not main_conn
+
+        db.disconnect()
