@@ -144,6 +144,33 @@ user@example.com → sha256_hash...
 - Retry logic with exponential backoff
 - Connection pooling for efficiency
 
+### Hosts Mirenku Can Contact
+
+Mirenku is local-first: with no MAL account connected and update checking
+off (the default), the app makes **zero** network requests. The complete
+list of hosts it can ever contact, and when:
+
+| Host | When | Data sent |
+|---|---|---|
+| `myanimelist.net` / `api.myanimelist.net` | Only after you connect a MAL account (OAuth login, sync, authenticated search) | OAuth tokens, your list changes |
+| MAL image CDN (`cdn.myanimelist.net`) | Cover-art download when MAL features are used | Image URLs only |
+| `api.jikan.moe` (**Jikan — a third-party MAL API mirror**) | Unauthenticated search / public-list import, no MAL account needed | Search terms / the username you enter |
+| `api.github.com` | Update check — **off by default**, opt-in in Settings | Public release lookup only; no identifiers |
+
+No other host is ever contacted. There is no telemetry, no analytics, and
+no crash reporting.
+
+### Token Storage Trade-offs
+
+Tokens are stored via the OS keyring where available, with encrypted-file
+(Fernet) fallback. One documented trade-off: on Windows, keyring entries
+are size-limited (2560 bytes), so oversized token sets are split — the
+long-lived refresh token stays in the keyring while the short-lived access
+token (expires within ~31 days) is written to a plain JSON metadata file.
+An attacker with local file access could read that short-lived token; the
+same attacker could read the browser cookies for any site, so the keyring
+remains the meaningful boundary.
+
 ## Security Best Practices
 
 ### For Users

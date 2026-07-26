@@ -9,7 +9,7 @@
 
 [![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases)
 [![License](https://img.shields.io/badge/license-Prosperity%203.0-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Platform](https://img.shields.io/badge/Windows-Stable-green)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku)
 [![Platform](https://img.shields.io/badge/macOS%20%7C%20Linux-Experimental-yellow)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku)
 
@@ -49,6 +49,25 @@ A powerful desktop application for tracking your anime viewing progress with MyA
 - 🔄 Advanced statistics and analytics
 - 🔄 Dark/Light theme support
 - 🔄 Cloud backup options
+
+## 🔒 Privacy
+
+Mirenku is local-first. Your list lives in a SQLite database on your
+computer; there is no cloud storage, no account requirement, no telemetry,
+and no analytics. With no MAL account connected and update checking off
+(the default), the app makes **zero** network requests.
+
+The complete list of hosts Mirenku can ever contact:
+
+| Host | When |
+|---|---|
+| `myanimelist.net` / `api.myanimelist.net` | Only after you connect a MAL account |
+| MAL image CDN | Cover art, when MAL features are used |
+| `api.jikan.moe` (Jikan, a third-party MAL API mirror) | Unauthenticated search / public-list import |
+| `api.github.com` | Update check — off by default, opt-in |
+
+See [SECURITY.md](SECURITY.md) for the full disclosure, including token
+storage trade-offs.
 
 ## 📦 Installation
 

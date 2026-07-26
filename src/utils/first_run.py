@@ -65,7 +65,8 @@ class FirstRunManager:
         """Load configuration from file"""
         if self.config_file.exists():
             try:
-                with open(self.config_file, encoding="utf-8") as f:
+                # utf-8-sig tolerates a BOM (some editors add one)
+                with open(self.config_file, encoding="utf-8-sig") as f:
                     self.config = json.load(f)
 
                 # Migrate old config format if needed

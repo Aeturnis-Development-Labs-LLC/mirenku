@@ -100,7 +100,12 @@ class MainWindow:
         self.search_var = tk.StringVar()
 
         # Apply theme (colors, fonts, ttk styles live in ui/theme.py)
-        self.fonts = apply_theme(self.root)
+        from utils.first_run import FirstRunManager
+
+        self.first_run_manager = FirstRunManager()
+        self.fonts = apply_theme(
+            self.root, mode=self.first_run_manager.get_preference("theme", "System")
+        )
 
         # Setup UI
         self._create_menu()
@@ -210,14 +215,16 @@ class MainWindow:
         toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
 
         # Add button
-        self.add_btn = ttk.Button(toolbar, text="➕ Add Anime", command=self.add_anime)
+        self.add_btn = ttk.Button(
+            toolbar, text="Add Anime", style="Accent.TButton", command=self.add_anime
+        )
         self.add_btn.pack(side=tk.LEFT, padx=2)
 
         # Search bar
         search_frame = ttk.Frame(toolbar)
         search_frame.pack(side=tk.LEFT, padx=20)
 
-        ttk.Label(search_frame, text="🔍").pack(side=tk.LEFT)
+        ttk.Label(search_frame, text="Search:").pack(side=tk.LEFT)
         self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=30)
         self.search_entry.pack(side=tk.LEFT, padx=5)
 
@@ -225,30 +232,25 @@ class MainWindow:
         mal_frame = ttk.Frame(toolbar)
         mal_frame.pack(side=tk.LEFT, padx=20)
 
-        # MAL Connect button (using tk.Button for color control)
-        self.mal_connect_btn = tk.Button(
+        # MAL Connect button
+        self.mal_connect_btn = ttk.Button(
             mal_frame,
-            text="🔗 Connect MAL",
+            text="Connect MAL",
             command=self.quick_mal_connect,
-            font=("TkDefaultFont", 9),
-            relief=tk.RAISED,
-            bd=1,
-            padx=8,
-            pady=3,
         )
         self.mal_connect_btn.pack(side=tk.LEFT, padx=2)
 
         # Update button text based on auth status
         if self.mal_auth_manager.is_authenticated():
-            self.mal_connect_btn.config(text="✓ MAL Connected", fg="green")
+            self.mal_connect_btn.config(text="MAL Connected ✓")
 
         # MAL search button
-        ttk.Button(mal_frame, text="🌐 MAL Search", command=self.search_mal).pack(
+        ttk.Button(mal_frame, text="MAL Search", command=self.search_mal).pack(
             side=tk.LEFT, padx=2
         )
 
         # Sync button
-        self.sync_button = ttk.Button(mal_frame, text="🔄 Sync", command=self.sync_with_mal_v2)
+        self.sync_button = ttk.Button(mal_frame, text="Sync", command=self.sync_with_mal_v2)
         self.sync_button.pack(side=tk.LEFT, padx=2)
 
         # Enable sync button if authenticated
@@ -276,19 +278,30 @@ class MainWindow:
         self.filter_combo.pack(side=tk.LEFT)
         self.filter_combo.bind("<<ComboboxSelected>>", lambda e: self.apply_filter())
 
+    def _apply_tree_stripes(self):
+        """(Re)apply theme-aware zebra stripe colors to the anime list"""
+        from ui.theme import stripe_colors
+
+        odd_bg, even_bg = stripe_colors()
+        self.tree.tag_configure("oddrow", background=odd_bg)
+        self.tree.tag_configure("evenrow", background=even_bg)
+
+    def _apply_theme_preference(self):
+        """Apply the saved theme preference and refresh theme-dependent UI"""
+        self.fonts = apply_theme(
+            self.root, mode=self.first_run_manager.get_preference("theme", "System")
+        )
+        self._apply_tree_stripes()
+
     def _create_main_content(self):
         """Create main content area"""
         # Main frame
         main_frame = ttk.Frame(self.root)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # Configure style for zebra stripes using Mirenku colors
-        style = ttk.Style()
-        # Mirenku teal/turquoise color
-        style.configure("Treeview", background="white", foreground="black", fieldbackground="white")
-        style.map("Treeview", background=[("selected", "#2dd4bf")])  # Mirenku teal on selection
-
         # Create treeview for anime list (hide tree column with show="headings")
+        # Base Treeview colors come from the theme; selection accent is set
+        # in apply_theme
         self.tree = ttk.Treeview(
             main_frame,
             columns=("title", "progress", "status", "score", "mal"),
@@ -296,9 +309,8 @@ class MainWindow:
             selectmode="browse",
         )
 
-        # Configure tags for zebra stripes
-        self.tree.tag_configure("oddrow", background="white")
-        self.tree.tag_configure("evenrow", background="#e6fffa")  # Very light teal
+        # Configure tags for zebra stripes (theme-aware)
+        self._apply_tree_stripes()
 
         # Sort tracking
         self.sort_column = None
@@ -932,7 +944,7 @@ Added This Week: {stats.get('added_this_week', 0)}"""
             )
             if response:
                 self.mal_auth_manager.oauth_client.logout()
-                self.mal_connect_btn.config(text="🔗 Connect MAL", fg="black")
+                self.mal_connect_btn.config(text="Connect MAL")
                 self.sync_button.config(state="disabled")
                 self.sync_status_label.config(text="Not Connected", foreground="gray")
                 messagebox.showinfo("Disconnected", "Disconnected from MyAnimeList")
@@ -982,7 +994,7 @@ Added This Week: {stats.get('added_this_week', 0)}"""
         self.sync_service.enable_sync()
 
         # Update UI
-        self.mal_connect_btn.config(text="✓ MAL Connected", fg="green")
+        self.mal_connect_btn.config(text="MAL Connected ✓")
         self.sync_button.config(state="normal")
         self.sync_status_label.config(text="Ready", foreground="green")
 
@@ -1020,7 +1032,7 @@ Added This Week: {stats.get('added_this_week', 0)}"""
             self.sync_service.enable_sync()
 
             # Update buttons
-            self.mal_connect_btn.config(text="✓ MAL Connected", fg="green")
+            self.mal_connect_btn.config(text="MAL Connected ✓")
             self.sync_button.config(state="normal")
             self.sync_status_label.config(text="Sync: Ready", foreground="green")
 
@@ -1091,6 +1103,10 @@ Added This Week: {stats.get('added_this_week', 0)}"""
         if dialog.result:
             # Apply settings
             self.check_for_updates_enabled = self.config.get("check_for_updates", False)
+
+            # Re-read prefs and apply the theme immediately (live switch)
+            self.first_run_manager.load_config()
+            self._apply_theme_preference()
 
             # Show success notification
             self.notifications.show("Settings saved successfully", NotificationLevel.SUCCESS)
