@@ -10,10 +10,7 @@ from tkinter import Menu, messagebox, ttk
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models.anime import Anime
-from models.database import Database
-from services.anime_service import AnimeService
 from ui.dialogs import AddAnimeDialog, EditAnimeDialog
-from utils.config import Config
 from utils.database_watcher import SmartDatabaseWatcher
 from utils.notifications import (
     ErrorHandler,
@@ -35,66 +32,26 @@ logger = logging.getLogger(__name__)
 class MainWindow:
     """Main application window"""
 
-    def __init__(self, root: tk.Tk, database: Database):
+    def __init__(self, root: tk.Tk, context: "AppContext"):
         """Initialize main window
 
         Args:
             root: Tkinter root window
-            database: Database instance
+            context: Fully-built application context (composition root lives
+                in app_context.py, not here)
         """
         self.root = root
-        self.db = database
-        self.service = AnimeService(database)
-        self.config = Config()
-        self.persistence = PersistenceManager(self.config, database)
-
-        # Set up MAL service
-        from services.mal_service import MALService
-
-        cache_dir = self.config.get_data_directory() / "mal_cache"
-        self.mal_service = MALService(cache_dir)
-
-        # Set up image service
-        from services.image_service import ImageService
-
-        image_cache_dir = self.config.get_data_directory() / "image_cache"
-        self.image_service = ImageService(image_cache_dir)
-
-        # Set up MAL OAuth2 authentication (Phase 3)
-        from ui.mal_auth_dialog import MALAuthManager
-
-        self.mal_auth_manager = MALAuthManager(
-            self.config.get_data_directory()
-            # Client ID is embedded in the application
-        )
-
-        # Set up ScrobblingManager for WebSocket server (v0.4.0)
-        try:
-            from services.scrobbling_manager import ScrobblingManager
-            self.scrobbling_manager = ScrobblingManager(self.service, self.config)
-            # Start server if enabled
-            self.scrobbling_manager.start()
-        except Exception as e:
-            logger.warning(f"Failed to initialize ScrobblingManager: {e}")
-            self.scrobbling_manager = None
-
-        # Set up MAL API v2 service if authenticated (silent check at startup)
-        self.mal_api_v2_service = None
-        if self.mal_auth_manager.is_authenticated(silent=True):
-            from services.mal_api_v2_service import MALAPIv2Service
-
-            self.mal_api_v2_service = MALAPIv2Service(self.mal_auth_manager.oauth_client)
-
-        # Set up sync service (Phase 3 functionality)
-        from services.sync_service import SyncService
-
-        self.sync_service = SyncService(
-            database,
-            self.mal_api_v2_service,
-            self.mal_auth_manager.oauth_client
-            if hasattr(self.mal_auth_manager, "oauth_client")
-            else None,
-        )
+        self.context = context
+        self.db = context.db
+        self.service = context.anime_service
+        self.config = context.config
+        self.persistence = context.persistence
+        self.mal_service = context.mal_service
+        self.image_service = context.image_service
+        self.mal_auth_manager = context.mal_auth_manager
+        self.scrobbling_manager = context.scrobbling_manager
+        self.mal_api_v2_service = context.mal_api_v2_service
+        self.sync_service = context.sync_service
 
         # Set up notification system
         self.notifications = NotificationManager(root)

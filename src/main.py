@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import tkinter as tk
 
+from app_context import AppContext
 from models.database import Database
 from ui.first_run_dialog import FirstRunDialog
 from ui.main_window import MainWindow
@@ -107,7 +108,10 @@ def main():
         root.update_idletasks()
         force_windows_icon()
 
-        app = MainWindow(root, db)
+        # Build all services (composition root); must run after tk.Tk()
+        context = AppContext.build(config, db)
+
+        app = MainWindow(root, context)
 
         # Center window on screen
         root.update_idletasks()
