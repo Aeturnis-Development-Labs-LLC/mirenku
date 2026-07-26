@@ -80,14 +80,17 @@ class TestMainWindowWiring:
         db.disconnect()
 
     def test_auth_error_reaches_error_dialog(self, root, tmp_path):
-        """Regression (F4): the auth except-branch referenced an unbound
-        exception variable, so real auth failures raised NameError inside
-        the after-callback instead of showing the error dialog."""
+        """Regression (F4/R2b): a failing MAL authorization must surface the
+        real error in a dialog on the main thread — it used to raise
+        NameError inside the marshaled callback instead."""
+        import time
+
         db_path = tmp_path / "anime_tracker.db"
         db = Database(db_path)
         db.initialize()
 
         mock_auth_manager = Mock()
+        mock_auth_manager.is_authenticated.return_value = False
         mock_auth_manager.oauth_client.authorize.side_effect = RuntimeError("boom")
 
         context = make_test_context(tmp_path, db, mal_auth_manager=mock_auth_manager)
@@ -98,8 +101,13 @@ class TestMainWindowWiring:
             window = MainWindow(root, context)
 
             with patch("tkinter.messagebox.showerror") as mock_error:
-                window._perform_mal_auth()
-                root.update()  # drain the after() queue
+                window.quick_mal_connect()
+
+                # Pump the Tk loop until the worker's error is marshaled back
+                deadline = time.time() + 5
+                while not mock_error.called and time.time() < deadline:
+                    root.update()
+                    time.sleep(0.01)
 
                 mock_error.assert_called_once()
                 assert "boom" in mock_error.call_args[0][1]

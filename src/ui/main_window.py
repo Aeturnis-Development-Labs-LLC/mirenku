@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from models.anime import Anime
 from ui.dialogs import AddAnimeDialog, EditAnimeDialog
 from utils.database_watcher import SmartDatabaseWatcher
+from utils.worker import run_async
 from utils.notifications import (
     ErrorHandler,
     NotificationLevel,
@@ -850,73 +851,71 @@ Added This Week: {stats.get('added_this_week', 0)}"""
         # Show progress
         self.notifications.show("Importing from MAL...", level="info")
 
-        # Import in background thread
-        import threading
+        run_async(
+            self.root,
+            lambda: self._fetch_mal_user_list(username),
+            on_done=lambda result: self._on_mal_user_list_fetched(username, result),
+            on_error=lambda e: messagebox.showerror(
+                "Import Failed", f"Failed to import from MAL: {e!s}"
+            ),
+            name="mal-import",
+        )
 
-        thread = threading.Thread(target=self._import_mal_user_thread, args=(username,))
-        thread.daemon = True
-        thread.start()
+    def _fetch_mal_user_list(self, username: str):
+        """Fetch and normalize a MAL user's list (worker thread; no UI)"""
+        anime_list = self.mal_service.get_user_animelist(username)
 
-    def _import_mal_user_thread(self, username: str):
-        """Background thread for importing MAL user list"""
-        try:
-            # Get user's anime list
-            anime_list = self.mal_service.get_user_animelist(username)
+        if not anime_list:
+            return None
 
-            if not anime_list:
-                self.root.after(
-                    0,
-                    lambda: messagebox.showinfo(
-                        "No Anime Found",
-                        f"No anime found for user '{username}'.\nThe list may be private or the username may be incorrect.",
-                    ),
-                )
-                return
+        # Prepare anime data for preview
+        processed_list = []
+        for mal_anime in anime_list:
+            anime_data = mal_anime.get("anime", {})
 
-            # Prepare anime data for preview
-            processed_list = []
-            for mal_anime in anime_list:
-                anime_data = mal_anime.get("anime", {})
+            # Combine data from list and anime info
+            combined = {
+                "mal_id": anime_data.get("mal_id"),
+                "title": anime_data.get("title", "Unknown"),
+                "title_english": anime_data.get("title_english"),
+                "title_japanese": anime_data.get("title_japanese"),
+                "episodes": anime_data.get("episodes"),
+                "num_episodes_watched": mal_anime.get("episodes_watched", 0),
+                "score": mal_anime.get("score"),
+                "watching_status": mal_anime.get("watching_status"),
+                "synopsis": anime_data.get("synopsis"),
+                "images": anime_data.get("images", {}),
+                "genres": anime_data.get("genres", []),
+                "studios": anime_data.get("studios", []),
+            }
 
-                # Combine data from list and anime info
-                combined = {
-                    "mal_id": anime_data.get("mal_id"),
-                    "title": anime_data.get("title", "Unknown"),
-                    "title_english": anime_data.get("title_english"),
-                    "title_japanese": anime_data.get("title_japanese"),
-                    "episodes": anime_data.get("episodes"),
-                    "num_episodes_watched": mal_anime.get("episodes_watched", 0),
-                    "score": mal_anime.get("score"),
-                    "watching_status": mal_anime.get("watching_status"),
-                    "synopsis": anime_data.get("synopsis"),
-                    "images": anime_data.get("images", {}),
-                    "genres": anime_data.get("genres", []),
-                    "studios": anime_data.get("studios", []),
-                }
-
-                # Map MAL status to readable format
-                status_map = {
-                    1: "watching",
-                    2: "completed",
-                    3: "on_hold",
-                    4: "dropped",
-                    6: "plan_to_watch",
-                }
-                combined["watching_status"] = status_map.get(
-                    mal_anime.get("watching_status"), "unknown"
-                )
-
-                processed_list.append(combined)
-
-            # Show preview dialog on main thread
-            self.root.after(0, lambda: self._show_import_preview(processed_list))
-
-        except Exception as e:
-            logger.error(f"Import failed: {e}")
-            self.root.after(
-                0,
-                lambda: messagebox.showerror("Import Failed", f"Failed to import from MAL: {e!s}"),
+            # Map MAL status to readable format
+            status_map = {
+                1: "watching",
+                2: "completed",
+                3: "on_hold",
+                4: "dropped",
+                6: "plan_to_watch",
+            }
+            combined["watching_status"] = status_map.get(
+                mal_anime.get("watching_status"), "unknown"
             )
+
+            processed_list.append(combined)
+
+        return processed_list
+
+    def _on_mal_user_list_fetched(self, username: str, processed_list):
+        """Show import preview or a not-found notice (main thread)"""
+        if processed_list is None:
+            messagebox.showinfo(
+                "No Anime Found",
+                f"No anime found for user '{username}'.\n"
+                "The list may be private or the username may be incorrect.",
+            )
+            return
+
+        self._show_import_preview(processed_list)
 
     def _show_import_preview(self, anime_list):
         """Show import preview dialog"""
@@ -937,24 +936,41 @@ Added This Week: {stats.get('added_this_week', 0)}"""
         messagebox.showinfo("Import Complete", message)
 
     def update_mal_status(self):
-        """Update MAL connection status in UI"""
-        # Check OAuth authentication status
-        if self.mal_auth_manager.is_authenticated():
+        """Update MAL connection status in UI.
+
+        The check runs on a worker thread: is_authenticated() may perform a
+        synchronous network token refresh, which must never block the Tk
+        main thread (it froze the UI on every 30s poll).
+        """
+
+        def check():
+            return (
+                self.mal_auth_manager.is_authenticated(),
+                self.sync_service.get_sync_queue_count(),
+            )
+
+        run_async(
+            self.root,
+            check,
+            on_done=self._apply_mal_status,
+            on_error=lambda e: self.root.after(30000, self.update_mal_status),
+            name="mal-status",
+        )
+
+    def _apply_mal_status(self, status):
+        """Apply polled MAL status to widgets (main thread)"""
+        is_authenticated, queue_count = status
+
+        if is_authenticated:
             self.mal_status_label.config(text="MAL: ✓", foreground="green")
-        else:
-            self.mal_status_label.config(text="MAL: ✗", foreground="red")
-
-        # Update sync queue count
-        queue_count = self.sync_service.get_sync_queue_count()
-        self.sync_queue_label.config(text=f"Queue: {queue_count}")
-
-        # Update sync button state based on authentication
-        if self.mal_auth_manager.is_authenticated():
             self.sync_button.config(state="normal")
             self.sync_status_label.config(text="Ready", foreground="green")
         else:
+            self.mal_status_label.config(text="MAL: ✗", foreground="red")
             self.sync_button.config(state="disabled")
             self.sync_status_label.config(text="Not Connected", foreground="gray")
+
+        self.sync_queue_label.config(text=f"Queue: {queue_count}")
 
         # Schedule next update in 30 seconds
         self.root.after(30000, self.update_mal_status)
@@ -977,40 +993,33 @@ Added This Week: {stats.get('added_this_week', 0)}"""
             # Not connected, start authentication
             self.notifications.show("Opening browser for MAL authentication...", level="info")
 
-            # Start authentication in background thread
-            import threading
-
-            thread = threading.Thread(target=self._perform_mal_auth)
-            thread.daemon = True
-            thread.start()
-
-    def _perform_mal_auth(self):
-        """Perform MAL authentication in background"""
-        try:
-            success = self.mal_auth_manager.oauth_client.authorize()
-
-            if success:
-                # Update UI on main thread
-                self.root.after(0, self._mal_auth_success)
-            else:
-                self.root.after(
-                    0,
-                    lambda: messagebox.showerror(
-                        "Authentication Failed",
-                        "Failed to authenticate with MyAnimeList.\n\n"
-                        "Please make sure:\n"
-                        "1. You're logged in to MyAnimeList\n"
-                        "2. You authorized the application\n"
-                        "3. Port 8888 is not blocked",
-                    ),
-                )
-        except Exception as e:
-            self.root.after(
-                0,
-                lambda msg=str(e): messagebox.showerror(
-                    "Authentication Error", f"An error occurred during authentication:\n{msg}"
-                ),
+            run_async(
+                self.root,
+                self.mal_auth_manager.oauth_client.authorize,
+                on_done=self._on_mal_auth_result,
+                on_error=self._on_mal_auth_error,
+                name="mal-auth",
             )
+
+    def _on_mal_auth_result(self, success: bool):
+        """Handle auth outcome (main thread)"""
+        if success:
+            self._mal_auth_success()
+        else:
+            messagebox.showerror(
+                "Authentication Failed",
+                "Failed to authenticate with MyAnimeList.\n\n"
+                "Please make sure:\n"
+                "1. You're logged in to MyAnimeList\n"
+                "2. You authorized the application\n"
+                "3. Port 8888 is not blocked",
+            )
+
+    def _on_mal_auth_error(self, error: Exception):
+        """Handle auth exception (main thread)"""
+        messagebox.showerror(
+            "Authentication Error", f"An error occurred during authentication:\n{error!s}"
+        )
 
     def _mal_auth_success(self):
         """Handle successful MAL authentication"""
