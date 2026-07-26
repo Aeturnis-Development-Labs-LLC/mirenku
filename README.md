@@ -50,6 +50,25 @@ A powerful desktop application for tracking your anime viewing progress with MyA
 - 🔄 Dark/Light theme support
 - 🔄 Cloud backup options
 
+## 🔒 Privacy
+
+Mirenku is local-first. Your list lives in a SQLite database on your
+computer; there is no cloud storage, no account requirement, no telemetry,
+and no analytics. With no MAL account connected and update checking off
+(the default), the app makes **zero** network requests.
+
+The complete list of hosts Mirenku can ever contact:
+
+| Host | When |
+|---|---|
+| `myanimelist.net` / `api.myanimelist.net` | Only after you connect a MAL account |
+| MAL image CDN | Cover art, when MAL features are used |
+| `api.jikan.moe` (Jikan, a third-party MAL API mirror) | Unauthenticated search / public-list import |
+| `api.github.com` | Update check — off by default, opt-in |
+
+See [SECURITY.md](SECURITY.md) for the full disclosure, including token
+storage trade-offs.
+
 ## 📦 Installation
 
 ### Windows (Stable)
