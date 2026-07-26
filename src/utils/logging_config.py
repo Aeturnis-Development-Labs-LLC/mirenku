@@ -7,6 +7,32 @@ from datetime import datetime
 from pathlib import Path
 
 
+class SanitizingFilter(logging.Filter):
+    """Scrub tokens/secrets from every record before a handler writes it.
+
+    Defense in depth: log call sites should never pass secrets, but a
+    persisted log file must not depend on every call site being careful.
+    """
+
+    def __init__(self):
+        super().__init__()
+        from utils.error_sanitizer import ErrorSanitizer
+
+        self._sanitizer = ErrorSanitizer()
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+            sanitized = self._sanitizer.sanitize(message)
+            if sanitized != message:
+                record.msg = sanitized
+                record.args = None
+        except Exception:
+            # Never let sanitization break logging itself
+            pass
+        return True
+
+
 def setup_logging(log_dir: Path = None, log_level: str = "INFO", config=None):
     """Set up application logging
 
@@ -59,6 +85,7 @@ def setup_logging(log_dir: Path = None, log_level: str = "INFO", config=None):
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(detailed_formatter)
+    file_handler.addFilter(SanitizingFilter())
     root_logger.addHandler(file_handler)
 
     # Console handler - only for errors in production
@@ -70,6 +97,7 @@ def setup_logging(log_dir: Path = None, log_level: str = "INFO", config=None):
         # In development, show info and above
         console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(simple_formatter)
+    console_handler.addFilter(SanitizingFilter())
     root_logger.addHandler(console_handler)
 
     # Log startup
