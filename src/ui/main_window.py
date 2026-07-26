@@ -102,7 +102,7 @@ class MainWindow:
         setup_global_exception_handler(self.error_handler)
 
         # Set up database watcher for auto-refresh
-        db_path = self.config.get_data_directory() / "anime.db"
+        db_path = self.config.get_db_path()
         self.db_watcher = SmartDatabaseWatcher(
             db_path=db_path,
             callback=self._on_database_change,
