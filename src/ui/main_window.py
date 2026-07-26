@@ -1047,11 +1047,11 @@ Added This Week: {stats.get('added_this_week', 0)}"""
                         "3. Port 8888 is not blocked",
                     ),
                 )
-        except Exception:
+        except Exception as e:
             self.root.after(
                 0,
-                lambda: messagebox.showerror(
-                    "Authentication Error", f"An error occurred during authentication:\n{e!s}"
+                lambda msg=str(e): messagebox.showerror(
+                    "Authentication Error", f"An error occurred during authentication:\n{msg}"
                 ),
             )
 
