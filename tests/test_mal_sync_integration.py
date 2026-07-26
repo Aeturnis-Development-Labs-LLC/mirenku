@@ -1,6 +1,6 @@
-"""
+﻿"""
 Integration tests for MAL sync with OAuth2
-Tests that the new OAuth2 protocol client works with sync operations
+Tests that the OAuth2 HTTP client works with sync operations
 """
 
 import pytest
@@ -32,10 +32,10 @@ class TestMALSyncIntegration:
     
     @pytest.fixture
     def mock_oauth_client(self):
-        """Mock OAuth2 protocol client"""
-        from services.mal_oauth2_protocol import MALOAuth2ProtocolClient
-        with patch('services.mal_oauth2_protocol.TokenStorage'):
-            client = MALOAuth2ProtocolClient(
+        """Mock OAuth2 HTTP client"""
+        from services.mal_oauth2_http import MALOAuth2HTTPClient
+        with patch('services.mal_oauth2_http.TokenStorage'):
+            client = MALOAuth2HTTPClient(
                 client_id="test_client",
                 token_storage_path=Path("test_tokens.json")
             )
@@ -69,7 +69,7 @@ class TestMALSyncIntegration:
         result = sync_service.refresh_authentication()
         assert result is True
     
-    @patch('services.mal_oauth2_protocol.urllib.request.urlopen')
+    @patch('services.mal_oauth2_http.urllib.request.urlopen')
     def test_pull_user_list_with_oauth(self, mock_urlopen, mal_api_service):
         """Test pulling user anime list with OAuth"""
         # Mock API response
@@ -108,7 +108,7 @@ class TestMALSyncIntegration:
         assert 'Authorization' in request.headers
         assert request.headers['Authorization'] == 'Bearer valid_token'
     
-    @patch('services.mal_oauth2_protocol.urllib.request.urlopen')
+    @patch('services.mal_oauth2_http.urllib.request.urlopen')
     def test_push_anime_update_with_oauth(self, mock_urlopen, mal_api_service):
         """Test pushing anime updates with OAuth"""
         from services.mal_api_v2_service import MALStatus
@@ -137,20 +137,12 @@ class TestMALSyncIntegration:
         assert request.headers['Authorization'] == 'Bearer valid_token'
         assert request.get_method() == 'PATCH'
     
-    @patch('services.mal_oauth2_protocol.urllib.request.urlopen')
+    @patch('services.mal_oauth2_http.urllib.request.urlopen')
     def test_token_refresh_during_sync(self, mock_urlopen, mal_api_service, mock_oauth_client):
         """Test automatic token refresh during sync operations"""
-        import urllib.error
-        
-        # Set token as expired
+        # Set token as expired — is_authenticated() refreshes before the API call
         mock_oauth_client.token_expiry = datetime.now() - timedelta(hours=1)
-        
-        # First call returns 401, triggering refresh
-        error = urllib.error.HTTPError(
-            url="test", code=401, msg="Unauthorized",
-            hdrs={}, fp=None
-        )
-        
+
         # Mock refresh token response
         refresh_response = MagicMock()
         refresh_response.status = 200
@@ -159,7 +151,7 @@ class TestMALSyncIntegration:
             'refresh_token': 'new_refresh_token',
             'expires_in': 2678400
         }).encode()
-        
+
         # Mock successful API response after refresh
         api_response = MagicMock()
         api_response.status = 200
@@ -167,21 +159,20 @@ class TestMALSyncIntegration:
             'name': 'TestUser',
             'joined_at': '2024-01-01'
         }).encode()
-        
-        # First API call fails with 401, refresh succeeds, retry succeeds
+
+        # Expired token triggers refresh first, then the API call proceeds
         mock_urlopen.side_effect = [
-            error,  # Initial API call fails
             MagicMock(__enter__=MagicMock(return_value=refresh_response)),  # Refresh
-            MagicMock(__enter__=MagicMock(return_value=api_response))  # Retry
+            MagicMock(__enter__=MagicMock(return_value=api_response))  # API call
         ]
-        
+
         # Make API request
         result = mal_api_service.get_user_info()
-        
+
         assert result is not None
         assert result['name'] == 'TestUser'
         assert mock_oauth_client.access_token == 'new_access_token'
-        assert mock_urlopen.call_count == 3
+        assert mock_urlopen.call_count == 2
     
     def test_sync_queue_operations(self, sync_service, mock_database):
         """Test sync queue for offline operations"""
@@ -194,12 +185,12 @@ class TestMALSyncIntegration:
             data={'status': 'watching', 'score': 8}
         )
         
-        # Verify database insert was called
+        # Verify the queue insert happened (other statements may follow it)
         mock_database.get_cursor().execute.assert_called()
-        call_args = mock_database.get_cursor().execute.call_args
-        assert 'INSERT INTO sync_queue' in call_args[0][0]
+        statements = [c[0][0] for c in mock_database.get_cursor().execute.call_args_list]
+        assert any('INSERT INTO sync_queue' in s for s in statements)
     
-    @patch('services.mal_oauth2_protocol.urllib.request.urlopen')
+    @patch('services.mal_oauth2_http.urllib.request.urlopen')
     def test_full_sync_flow(self, mock_urlopen, sync_service, mal_api_service):
         """Test full sync flow: auth -> pull -> update -> push"""
         # 1. Verify authentication
@@ -246,50 +237,3 @@ class TestMALSyncIntegration:
             request = call[0][0]
             assert 'Authorization' in request.headers
             assert 'Bearer' in request.headers['Authorization']
-
-
-class TestMALAuthManager:
-    """Test MAL Auth Manager with new OAuth client"""
-    
-    @patch('ui.mal_auth_dialog.MALOAuth2ProtocolClient')
-    def test_auth_manager_uses_protocol_client(self, mock_oauth_class, tmp_path):
-        """Test MALAuthManager uses new protocol client"""
-        from ui.mal_auth_dialog import MALAuthManager
-        
-        # Create auth manager
-        auth_manager = MALAuthManager(
-            config_dir=tmp_path,
-            client_id="test_client"
-        )
-        
-        # Verify it created the protocol client
-        mock_oauth_class.assert_called_once_with(
-            "test_client",
-            tmp_path / "mal_tokens.json"
-        )
-        
-        assert auth_manager.oauth_client is not None
-    
-    @patch('tkinter.Tk')
-    def test_auth_dialog_with_protocol_client(self, mock_tk):
-        """Test MAL auth dialog works with protocol client"""
-        from ui.mal_auth_dialog import MALAuthDialog
-        from services.mal_oauth2_protocol import MALOAuth2ProtocolClient
-        
-        # Create mock OAuth client
-        with patch('services.mal_oauth2_protocol.TokenStorage'):
-            oauth_client = MALOAuth2ProtocolClient(
-                client_id="test",
-                token_storage_path=Path("test.json")
-            )
-            oauth_client.access_token = "token"
-            oauth_client.token_expiry = datetime.now() + timedelta(days=1)
-        
-        # Create dialog
-        mock_root = mock_tk.return_value
-        dialog = MALAuthDialog(mock_root, oauth_client)
-        
-        # Check authentication status
-        dialog.check_auth_status()
-        
-        assert dialog.authenticated is True

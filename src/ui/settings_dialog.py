@@ -1,17 +1,14 @@
 """
-Settings Dialog with Protocol Management
+Settings Dialog
 """
 
 import logging
-import sys
 import tkinter as tk
-import webbrowser
 from tkinter import messagebox, ttk
 from typing import Optional
 
 # Import managers
 from utils.first_run import FirstRunManager
-from utils.protocol_manager import ProtocolManager
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +21,6 @@ class SettingsDialog:
         parent,
         config=None,
         first_run_manager: FirstRunManager = None,
-        protocol_manager: ProtocolManager = None,
         scrobbling_manager=None,
     ):
         """
@@ -33,13 +29,11 @@ class SettingsDialog:
         Args:
             parent: Parent window
             first_run_manager: First run manager instance (optional)
-            protocol_manager: Protocol manager instance (optional)
             scrobbling_manager: Scrobbling manager instance (optional)
         """
         self.parent = parent
         self.config = config  # Added config parameter
         self.first_run_manager = first_run_manager or FirstRunManager()
-        self.protocol_manager = protocol_manager or ProtocolManager()
         self.scrobbling_manager = scrobbling_manager
         self.result = None
 
@@ -54,9 +48,6 @@ class SettingsDialog:
         self.dialog.grab_set()
 
         # Variables
-        self.auto_reregister_var = tk.BooleanVar(
-            value=self.first_run_manager.get_preference("auto_reregister", True)
-        )
         self.theme_var = tk.StringVar(
             value=self.first_run_manager.get_preference("theme", "System")
         )
@@ -107,7 +98,6 @@ class SettingsDialog:
 
         # Create tabs
         self._create_general_tab()
-        self._create_protocol_tab()
         self._create_sync_tab()
         self._create_updates_tab()
 
@@ -165,69 +155,6 @@ class SettingsDialog:
             self.general_frame, text="Your personal anime tracking companion", foreground="gray"
         )
         info_text.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(5, 0))
-
-    def _create_protocol_tab(self):
-        """Create Protocol settings tab"""
-        self.protocol_frame = ttk.Frame(self.notebook, padding="20")
-        self.notebook.add(self.protocol_frame, text="Protocol")
-
-        # Protocol status
-        status_frame = ttk.LabelFrame(
-            self.protocol_frame, text="Protocol Handler Status", padding="15"
-        )
-        status_frame.pack(fill=tk.X, pady=(0, 20))
-
-        # Status label
-        self.protocol_status_label = ttk.Label(
-            status_frame, text="Checking status...", font=("Segoe UI", 10)
-        )
-        self.protocol_status_label.pack(anchor=tk.W)
-
-        # Registered path (if applicable)
-        self.path_label = ttk.Label(status_frame, text="", foreground="gray", font=("Segoe UI", 9))
-        self.path_label.pack(anchor=tk.W, pady=(5, 0))
-
-        # Actions frame
-        actions_frame = ttk.LabelFrame(self.protocol_frame, text="Actions", padding="15")
-        actions_frame.pack(fill=tk.X, pady=(0, 20))
-
-        # Register/Unregister button (will be created dynamically)
-        self.register_button = None
-        self.unregister_button = None
-
-        # Test protocol button
-        self.test_button = ttk.Button(
-            actions_frame, text="Test Protocol", command=self._on_test_protocol, width=20
-        )
-        self.test_button.pack(pady=5)
-
-        # Options frame
-        options_frame = ttk.LabelFrame(self.protocol_frame, text="Options", padding="15")
-        options_frame.pack(fill=tk.X)
-
-        # Auto-reregister checkbox
-        self.auto_reregister_checkbox = ttk.Checkbutton(
-            options_frame,
-            text="Automatically re-register when application moves",
-            variable=self.auto_reregister_var,
-        )
-        self.auto_reregister_checkbox.pack(anchor=tk.W)
-
-        # Info text
-        info_label = ttk.Label(
-            options_frame,
-            text=(
-                "The protocol handler allows Mirenku to receive OAuth callbacks "
-                "from MyAnimeList without running a local server."
-            ),
-            wraplength=500,
-            foreground="gray",
-            font=("Segoe UI", 9),
-        )
-        info_label.pack(anchor=tk.W, pady=(15, 0))
-
-        # Refresh status
-        self._refresh_protocol_status()
 
     def _create_sync_tab(self):
         """Create Sync settings tab"""
@@ -346,113 +273,6 @@ class SettingsDialog:
         """Handle update check toggle"""
         enabled = self.check_updates_var.get()
         self.dialog_checkbox.config(state="normal" if enabled else "disabled")
-
-    def _refresh_protocol_status(self):
-        """Refresh protocol registration status"""
-        is_registered = self.protocol_manager.is_registered()
-
-        if is_registered:
-            self.protocol_status_label.config(
-                text="✓ Protocol handler is registered", foreground="green"
-            )
-
-            # Show registered path
-            path = self.protocol_manager.get_registered_path()
-            if path:
-                self.path_label.config(text=f"Location: {path}")
-
-            # Create unregister button if needed
-            if not self.unregister_button:
-                if self.register_button:
-                    self.register_button.destroy()
-                    self.register_button = None
-
-                actions_frame = self.test_button.master
-                self.unregister_button = ttk.Button(
-                    actions_frame,
-                    text="Unregister Protocol",
-                    command=self._on_unregister_protocol,
-                    width=20,
-                )
-                self.unregister_button.pack(before=self.test_button, pady=5)
-        else:
-            self.protocol_status_label.config(
-                text="✗ Protocol handler is not registered", foreground="red"
-            )
-            self.path_label.config(text="")
-
-            # Create register button if needed
-            if not self.register_button:
-                if self.unregister_button:
-                    self.unregister_button.destroy()
-                    self.unregister_button = None
-
-                actions_frame = self.test_button.master
-                self.register_button = ttk.Button(
-                    actions_frame,
-                    text="Register Protocol",
-                    command=self._on_register_protocol,
-                    width=20,
-                )
-                self.register_button.pack(before=self.test_button, pady=5)
-
-    def _on_register_protocol(self):
-        """Handle register protocol button"""
-        exe_path = sys.executable
-        success = self.protocol_manager.register_protocol(exe_path)
-
-        if success:
-            self.first_run_manager.set_preference("protocol_registered", True)
-            self.first_run_manager.save_app_location(exe_path)
-            messagebox.showinfo(
-                "Success", "Protocol handler registered successfully!", parent=self.dialog
-            )
-        else:
-            messagebox.showerror(
-                "Error",
-                "Failed to register protocol handler. " "You may need administrator privileges.",
-                parent=self.dialog,
-            )
-
-        self._refresh_protocol_status()
-
-    def _on_unregister_protocol(self):
-        """Handle unregister protocol button"""
-        if not messagebox.askyesno(
-            "Confirm",
-            "Are you sure you want to unregister the protocol handler?\n\n"
-            "This will prevent OAuth authentication from working.",
-            parent=self.dialog,
-        ):
-            return
-
-        success = self.protocol_manager.unregister_protocol()
-
-        if success:
-            self.first_run_manager.set_preference("protocol_registered", False)
-            messagebox.showinfo(
-                "Success", "Protocol handler unregistered successfully.", parent=self.dialog
-            )
-        else:
-            messagebox.showerror(
-                "Error", "Failed to unregister protocol handler.", parent=self.dialog
-            )
-
-        self._refresh_protocol_status()
-
-    def _on_test_protocol(self):
-        """Handle test protocol button"""
-        test_url = "mirenku://test?message=Protocol_handler_is_working"
-        webbrowser.open(test_url)
-
-        messagebox.showinfo(
-            "Test Protocol",
-            "A test URL has been opened. If the protocol is registered correctly, "
-            "Mirenku should handle the URL.\n\n"
-            "If nothing happens or your browser shows an error, the protocol "
-            "may not be registered.",
-            parent=self.dialog,
-        )
 
     def _on_auto_sync_toggle(self):
         """Handle auto-sync toggle"""
@@ -657,7 +477,6 @@ class SettingsDialog:
     def _on_save(self):
         """Handle Save button"""
         # Save all preferences
-        self.first_run_manager.set_preference("auto_reregister", self.auto_reregister_var.get())
         self.first_run_manager.set_preference("theme", self.theme_var.get())
         self.first_run_manager.set_preference("auto_sync", self.auto_sync_var.get())
         self.first_run_manager.set_preference("sync_interval", self.sync_interval_var.get())

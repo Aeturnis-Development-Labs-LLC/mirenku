@@ -60,11 +60,6 @@ class TokenStorage:
         self.fernet = None
         self.encryption_key = None
 
-        # Key rotation support
-        self.key_rotator = None
-        self.key_rotation_enabled = False
-        self.key_rotation_performed = False
-
         if self.storage_method == "fernet":
             self._init_fernet()
 
@@ -98,15 +93,6 @@ class TokenStorage:
 
     def _init_fernet(self):
         """Initialize Fernet encryption with key management"""
-        # If key rotation is enabled, use that instead
-        if self.key_rotation_enabled and self.key_rotator:
-            key = self.key_rotator.get_active_key()
-            if key:
-                self.encryption_key = key
-                self.fernet = Fernet(key.encode())
-                return
-
-        # Legacy key management
         if not self.key_file.exists():
             # Generate new key
             key = Fernet.generate_key()
@@ -170,41 +156,6 @@ class TokenStorage:
 
             return False
 
-    def enable_key_rotation(self, rotation_days: int = 30) -> None:
-        """
-        Enable automatic key rotation
-
-        Args:
-            rotation_days: Days before key rotation
-        """
-        from utils.key_rotation import KeyRotationManager
-
-        self.key_rotator = KeyRotationManager(app_name=self.app_name, rotation_days=rotation_days)
-        self.key_rotation_enabled = True
-
-        # Initialize with a key if none exists
-        if not self.key_rotator.get_active_key():
-            new_key = self.key_rotator.generate_new_key()
-            self.key_rotator.save_key_metadata(new_key)
-            self.encryption_key = new_key
-
-        logger.info(f"Key rotation enabled with {rotation_days} day rotation period")
-
-    def _check_and_rotate_key(self) -> None:
-        """Check if key rotation is needed and perform it"""
-        if not self.key_rotation_enabled or not self.key_rotator:
-            return
-
-        if self.key_rotator.needs_rotation():
-            logger.info("Key rotation needed, performing rotation...")
-            try:
-                new_key = self.key_rotator.rotate_key(self)
-                self.encryption_key = new_key
-                self.key_rotation_performed = True
-                logger.info("Key rotation completed successfully")
-            except Exception as e:
-                logger.error(f"Key rotation failed: {e}")
-
     def load_tokens(self) -> Optional[Dict[str, Any]]:
         """
         Load OAuth tokens from storage
@@ -212,9 +163,6 @@ class TokenStorage:
         Returns:
             Token dictionary or None if not found
         """
-        # Check for key rotation before loading
-        self._check_and_rotate_key()
-
         try:
             if self.storage_method == "keyring":
                 tokens = self._load_keyring()

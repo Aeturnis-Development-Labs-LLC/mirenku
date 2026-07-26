@@ -240,7 +240,6 @@ class FirstRunManager:
             "is_first_run": self.is_first_run(),
             "version": self.get_app_version(),
             "version_updated": self.is_version_updated(),
-            "protocol_registered": self.get_preference("protocol_registered", False),
             "welcome_shown": self.get_preference("welcome_shown", False),
             "first_run_skipped": self.get_preference("first_run_skipped", False),
         }
@@ -258,30 +257,6 @@ class FirstRunManager:
 
         # Show welcome on major version update (if configured)
         if self.is_version_updated() and self.get_preference("show_welcome_on_update", True):
-            return True
-
-        return False
-
-    def should_register_protocol(self, current_path: str) -> bool:
-        """
-        Determine if protocol should be (re)registered
-
-        Args:
-            current_path: Current executable path
-
-        Returns:
-            True if protocol should be registered
-        """
-        # Always register on first run (with user consent)
-        if self.is_first_run():
-            return True
-
-        # Re-register if app has moved
-        if self.has_app_moved(current_path):
-            return True
-
-        # Register if not previously registered
-        if not self.get_preference("protocol_registered", False):
             return True
 
         return False

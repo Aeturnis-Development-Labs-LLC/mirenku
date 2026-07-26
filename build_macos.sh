@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 # Mirenku v0.3.2 - macOS Build Script
 # Creates a macOS app bundle and DMG installer
 
@@ -30,7 +30,6 @@ pyinstaller --clean \
     --icon "assets/mirenku.icns" \
     --osx-bundle-identifier "${BUNDLE_ID}" \
     --add-data "assets:assets" \
-    --add-data "oauth_success.html:." \
     --hidden-import "tkinter" \
     --hidden-import "PIL._tkinter_finder" \
     --hidden-import "requests" \

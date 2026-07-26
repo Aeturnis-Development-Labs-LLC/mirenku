@@ -1,55 +1,45 @@
 """
-First Run Dialog for welcoming users and setting up protocol registration
+First Run Dialog for welcoming users
 """
 
 import logging
 import sys
 import tkinter as tk
-import webbrowser
-from tkinter import messagebox, ttk
+from tkinter import ttk
 from typing import Optional
 
-# Import managers
 from utils.first_run import FirstRunManager
-from utils.protocol_manager import ProtocolManager
 
 logger = logging.getLogger(__name__)
 
 
 class FirstRunDialog:
-    """First run welcome dialog with protocol registration"""
+    """First run welcome dialog"""
 
-    def __init__(
-        self, parent, first_run_manager: FirstRunManager, protocol_manager: ProtocolManager
-    ):
+    def __init__(self, parent, first_run_manager: FirstRunManager):
         """
         Initialize First Run Dialog
 
         Args:
             parent: Parent window
             first_run_manager: First run manager instance
-            protocol_manager: Protocol manager instance
         """
         logger.info("FirstRunDialog: Initializing")
         self.parent = parent
         self.first_run_manager = first_run_manager
-        self.protocol_manager = protocol_manager
         self.result = None
 
         # Create dialog window
         logger.info("FirstRunDialog: Creating Toplevel window")
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Welcome to Mirenku")
-        self.dialog.geometry("650x600")  # Increased height to fit all content
+        self.dialog.geometry("650x480")
         self.dialog.resizable(False, False)
         logger.info("FirstRunDialog: Window created")
 
         # Make dialog modal - but don't make it transient as it might cause issues
         # self.dialog.transient(parent)  # Commented out - may cause the window to close
         self.dialog.grab_set()  # This makes it modal
-
-        # Variables
-        self.register_protocol_var = tk.BooleanVar(value=True)
 
         # Create UI
         logger.info("FirstRunDialog: Creating UI")
@@ -117,9 +107,9 @@ class FirstRunDialog:
         info_frame.pack(fill=tk.X, pady=(0, 20))
 
         info_text = (
-            "To provide the best experience with MyAnimeList integration, "
-            "Mirenku needs to register a custom protocol handler. This allows "
-            "secure OAuth authentication without running a local server."
+            "Track your anime locally — your data stays on this computer. "
+            "Optionally connect your MyAnimeList account from the File menu "
+            "to search, import, and sync your list."
         )
 
         info_label = ttk.Label(
@@ -127,57 +117,33 @@ class FirstRunDialog:
         )
         info_label.pack()
 
-        # Benefits list
+        # Highlights list
         benefits_frame = ttk.Frame(main_frame)
         benefits_frame.pack(fill=tk.X, pady=(0, 20))
 
         benefits_title = ttk.Label(
-            benefits_frame, text="What this enables:", font=("Segoe UI", 11, "bold")
+            benefits_frame, text="What you get:", font=("Segoe UI", 11, "bold")
         )
         benefits_title.pack(anchor=tk.W, pady=(0, 10))
 
         benefits = [
-            "✓ Secure MyAnimeList authentication",
-            "✓ No browser security warnings",
-            "✓ Automatic token management",
-            "✓ Seamless integration with MAL",
+            "✓ Local-first tracking — no account required",
+            "✓ Optional MyAnimeList sync with secure OAuth",
+            "✓ Episode progress, scores, and statistics",
+            "✓ Import and export your list any time",
         ]
 
         for benefit in benefits:
             benefit_label = ttk.Label(benefits_frame, text=benefit, font=("Segoe UI", 10))
             benefit_label.pack(anchor=tk.W, pady=2)
 
-        # Protocol registration checkbox
-        checkbox_frame = ttk.Frame(main_frame)
-        checkbox_frame.pack(fill=tk.X, pady=(20, 10))
-
-        self.protocol_checkbox = ttk.Checkbutton(
-            checkbox_frame,
-            text="Register Mirenku protocol handler (recommended)",
-            variable=self.register_protocol_var,
-            style="Custom.TCheckbutton",
-        )
-        self.protocol_checkbox.pack(anchor=tk.W)
-
-        # Learn more link
-        self.learn_more_label = ttk.Label(
-            checkbox_frame,
-            text="Learn more about protocol handlers",
-            font=("Segoe UI", 9, "underline"),
-            foreground="blue",
-            cursor="hand2",
-        )
-        self.learn_more_label.pack(anchor=tk.W, padx=(22, 0), pady=(5, 0))
-        self.learn_more_label.bind("<Button-1>", self._on_learn_more)
-
         # Privacy note
         privacy_frame = ttk.Frame(main_frame)
         privacy_frame.pack(fill=tk.X, pady=(20, 0))
 
         privacy_text = (
-            "Note: This only affects your local system. No data is sent "
-            "to external servers. You can change this setting at any time "
-            "in the application settings."
+            "Note: Your data is stored locally on this computer. Nothing is "
+            "sent to external servers unless you connect a MyAnimeList account."
         )
 
         privacy_label = ttk.Label(
@@ -224,19 +190,6 @@ class FirstRunDialog:
         self.continue_button.pack(side=tk.RIGHT)
         self.continue_button.focus_set()
 
-        # Style configuration
-        self._configure_styles()
-
-    def _configure_styles(self):
-        """Configure custom styles"""
-        style = ttk.Style()
-
-        # Accent button style (primary action)
-        style.configure("Accent.TButton", font=("Segoe UI", 10, "bold"))
-
-        # Custom checkbox style
-        style.configure("Custom.TCheckbutton", font=("Segoe UI", 10))
-
     def _center_dialog(self):
         """Center the dialog on screen"""
         self.dialog.update_idletasks()
@@ -257,32 +210,8 @@ class FirstRunDialog:
 
     def _on_continue(self):
         """Handle Continue button click"""
-        # Get current executable path
-        exe_path = sys.executable
-
         # Save app location
-        self.first_run_manager.save_app_location(exe_path)
-
-        # Register protocol if checked
-        if self.register_protocol_var.get():
-            logger.info("Registering protocol handler")
-            success = self.protocol_manager.register_protocol(exe_path)
-
-            if success:
-                self.first_run_manager.set_preference("protocol_registered", True)
-                logger.info("Protocol handler registered successfully")
-            else:
-                # Show warning but don't block
-                messagebox.showwarning(
-                    "Protocol Registration",
-                    "Could not register the protocol handler. "
-                    "You may need to run the application as administrator or "
-                    "register it manually from settings.",
-                    parent=self.dialog,
-                )
-                self.first_run_manager.set_preference("protocol_registered", False)
-        else:
-            self.first_run_manager.set_preference("protocol_registered", False)
+        self.first_run_manager.save_app_location(sys.executable)
 
         # Mark first run complete
         self.first_run_manager.set_preference("welcome_shown", True)
@@ -310,12 +239,6 @@ class FirstRunDialog:
         logger.info("FirstRunDialog: ESC key pressed")
         self._on_skip()
 
-    def _on_learn_more(self, event):
-        """Handle Learn More link click"""
-        # Open documentation or help page
-        url = "https://github.com/Aeturnis/mirenku/wiki/Protocol-Handlers"
-        webbrowser.open(url)
-
     @staticmethod
     def should_show() -> bool:
         """
@@ -324,19 +247,7 @@ class FirstRunDialog:
         Returns:
             True if dialog should be shown
         """
-        first_run_mgr = FirstRunManager()
-
-        # Show on first run
-        if first_run_mgr.is_first_run():
-            return True
-
-        # Show if app moved and auto-reregister is enabled
-        exe_path = sys.executable
-        if first_run_mgr.has_app_moved(exe_path):
-            if first_run_mgr.get_preference("auto_reregister", True):
-                return True
-
-        return False
+        return FirstRunManager().is_first_run()
 
     @staticmethod
     def show(parent) -> Optional[str]:
@@ -349,10 +260,7 @@ class FirstRunDialog:
         Returns:
             Dialog result ("continue" or "skip")
         """
-        first_run_mgr = FirstRunManager()
-        protocol_mgr = ProtocolManager()
-
-        dialog = FirstRunDialog(parent, first_run_mgr, protocol_mgr)
+        dialog = FirstRunDialog(parent, FirstRunManager())
 
         # Check if dialog window exists
         try:

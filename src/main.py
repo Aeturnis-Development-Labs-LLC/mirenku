@@ -19,73 +19,21 @@ from ui.main_window import MainWindow
 from utils.config import Config
 from utils.first_run import FirstRunManager
 from utils.icon_helper import set_app_icon, set_taskbar_icon
+from utils.legacy_cleanup import cleanup_legacy_protocol_registration
 from utils.logging_config import clean_old_logs, setup_logging
-from utils.protocol_handler import ProtocolHandler
 from utils.single_instance import SingleInstanceManager
 from utils.windows_icon_fix import force_windows_icon, set_console_icon
 
 
-def handle_protocol_url(url: str, app_window=None):
-    """Handle incoming protocol URL"""
-    logging.info(f"Handling protocol URL: {url}")
-
-    # If we have an app window and it's an OAuth callback
-    if app_window and "mirenku://auth" in url:
-        # Pass the OAuth callback to the app window's MAL auth manager
-        if hasattr(app_window, "mal_auth_manager") and app_window.mal_auth_manager:
-            # Parse the URL to get parameters
-            from urllib.parse import parse_qs, urlparse
-
-            parsed = urlparse(url)
-            params = parse_qs(parsed.query) if parsed.query else {}
-
-            # Extract parameters
-            code = params.get("code", [None])[0]
-            state = params.get("state", [None])[0]
-            error = params.get("error", [None])[0]
-
-            # Pass to the OAuth client for processing
-            if hasattr(app_window.mal_auth_manager, "oauth_client"):
-                oauth_client = app_window.mal_auth_manager.oauth_client
-                logging.info("Processing OAuth callback")
-
-                # Use the proper OAuth callback handler instead of bypassing it
-                oauth_client._handle_oauth_callback(code, state, error)
-
-                # Check if authorization was successful
-                if oauth_client.auth_received.is_set() and not oauth_client.auth_error:
-                    logging.info("OAuth authorization successful, updating UI")
-                    # Update UI on success
-                    app_window._mal_auth_success()
-                    # Open success page to close the OAuth flow
-                    import os
-                    import webbrowser
-
-                    success_page = os.path.join(
-                        os.path.dirname(os.path.dirname(__file__)), "oauth_success.html"
-                    )
-                    if os.path.exists(success_page):
-                        webbrowser.open(f"file:///{success_page}")
-                elif oauth_client.auth_error:
-                    logging.error(f"OAuth authorization failed: {oauth_client.auth_error}")
-            else:
-                logging.error("MAL auth manager doesn't have OAuth client")
-        else:
-            logging.error("App window doesn't have MAL auth manager")
-    else:
-        # Handle other protocol URLs
-        handler = ProtocolHandler()
-        handler.handle_url(url)
-
-
-def handle_message(message: dict, app_window=None):
+def handle_message(message: dict, root: "tk.Tk" = None):
     """Handle IPC message from another instance"""
     action = message.get("action")
 
-    if action == "protocol_url" or action == "open_url":
-        url = message.get("url")
-        if url:
-            handle_protocol_url(url, app_window)
+    if action == "activate":
+        if root is not None:
+            root.deiconify()
+            root.lift()
+            root.focus_force()
     else:
         logging.warning(f"Unknown message action: {action}")
 
@@ -104,11 +52,8 @@ def main():
 
         logging.info(f"Mirenku v{__version__} starting...")
 
-        # Check for protocol URL in command line args
-        protocol_url = None
-        if len(sys.argv) > 1 and sys.argv[1].startswith("mirenku://"):
-            protocol_url = sys.argv[1]
-            logging.info(f"Received protocol URL from command line: {protocol_url}")
+        # Remove the legacy mirenku:// protocol registration if present
+        cleanup_legacy_protocol_registration()
 
         # Initialize single instance manager
         instance_mgr = SingleInstanceManager()
@@ -117,15 +62,8 @@ def main():
         if not instance_mgr.acquire_lock():
             logging.info("Another instance is already running")
 
-            # If we have a protocol URL, forward it to the primary instance
-            if protocol_url:
-                logging.info("Forwarding protocol URL to primary instance")
-                instance_mgr.send_message_to_primary(
-                    {"action": "protocol_url", "url": protocol_url}
-                )
-            else:
-                # Just bring the primary instance to front
-                instance_mgr.send_message_to_primary({"action": "activate"})
+            # Bring the primary instance to front
+            instance_mgr.send_message_to_primary({"action": "activate"})
 
             logging.info("Exiting - primary instance will handle the request")
             sys.exit(0)
@@ -189,17 +127,13 @@ def main():
             except Exception as e:
                 logging.error(f"Error showing first-run dialog: {e}", exc_info=True)
 
-        # Start message listener for IPC
+        # Start message listener for IPC (activate/bring-to-front from second instances)
         def message_callback(msg):
             # Run in main thread
-            root.after(0, lambda: handle_message(msg, app))
+            root.after(0, lambda: handle_message(msg, root))
 
         instance_mgr.register_message_callback(message_callback)
-        listener_thread = instance_mgr.start_message_listener()
-
-        # Handle any protocol URL that was passed on startup
-        if protocol_url:
-            root.after(100, lambda: handle_protocol_url(protocol_url, app))
+        instance_mgr.start_message_listener()
 
         # Start the application
         logging.info("Application ready")

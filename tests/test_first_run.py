@@ -1,4 +1,4 @@
-"""
+﻿"""
 Test suite for First Run Manager
 Tests first run detection, app movement detection, and config persistence
 """
@@ -175,10 +175,10 @@ class TestUserPreferences:
     
     def test_save_user_preference(self, manager):
         """Test saving user preferences"""
-        manager.set_preference("protocol_registered", True)
+        manager.set_preference("auto_sync", True)
         manager.set_preference("skip_welcome", False)
         
-        assert manager.get_preference("protocol_registered") is True
+        assert manager.get_preference("auto_sync") is True
         assert manager.get_preference("skip_welcome") is False
     
     def test_get_preference_with_default(self, manager):
@@ -332,14 +332,14 @@ class TestFirstRunFlow:
         assert manager.is_first_run() is True
         
         # User completes first run
-        manager.set_preference("protocol_registered", True)
+        manager.set_preference("auto_sync", True)
         manager.set_preference("welcome_shown", True)
         manager.save_app_location(r"C:\Program Files\Mirenku\mirenku.exe")
         manager.mark_first_run_complete()
         
         # Verify state
         assert manager.is_first_run() is False
-        assert manager.get_preference("protocol_registered") is True
+        assert manager.get_preference("auto_sync") is True
         assert manager.get_preference("welcome_shown") is True
         assert manager.get_saved_app_location() == r"C:\Program Files\Mirenku\mirenku.exe"
     
@@ -354,7 +354,7 @@ class TestFirstRunFlow:
         # Should still mark as complete
         assert manager.is_first_run() is False
         assert manager.get_preference("first_run_skipped") is True
-        assert manager.get_preference("protocol_registered") is None
+        assert manager.get_preference("auto_sync") is None
     
     def test_reset_first_run(self, manager):
         """Test resetting first run state"""

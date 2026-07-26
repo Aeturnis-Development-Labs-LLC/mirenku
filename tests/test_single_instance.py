@@ -155,7 +155,7 @@ class TestSingleInstanceIPC:
             secondary = SingleInstanceManager()
             
             # Send message
-            message = {"action": "open_url", "url": "mirenku://auth?code=123"}
+            message = {"action": "activate"}
             result = secondary.send_message_to_primary(message)
             
             assert result is True
@@ -170,15 +170,14 @@ class TestSingleInstanceIPC:
         """Test primary instance receives messages"""
         # Create message file
         message_file = temp_dir / "mirenku.msg"
-        message = {"action": "open_url", "url": "mirenku://auth?code=123"}
+        message = {"action": "activate"}
         message_file.write_text(json.dumps(message))
-        
+
         # Primary should receive message
         received = primary_manager.check_for_messages()
-        
+
         assert received is not None
-        assert received["action"] == "open_url"
-        assert received["url"] == "mirenku://auth?code=123"
+        assert received["action"] == "activate"
         
         # Message file should be deleted after reading
         assert not message_file.exists()

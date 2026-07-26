@@ -128,3 +128,8 @@ desktop.ini
 
 # Version info for PyInstaller
 version_info.txt
+
+coverage.xml
+
+.venv/
+
