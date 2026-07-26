@@ -9,7 +9,7 @@
 
 [![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku/releases)
 [![License](https://img.shields.io/badge/license-Prosperity%203.0-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Platform](https://img.shields.io/badge/Windows-Stable-green)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku)
 [![Platform](https://img.shields.io/badge/macOS%20%7C%20Linux-Experimental-yellow)](https://github.com/Aeturnis-Development-Labs-LLC/mirenku)
 
