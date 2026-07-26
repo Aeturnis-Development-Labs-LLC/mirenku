@@ -1,6 +1,6 @@
 [project]
 name = "mirenku"
-version = "0.3.2"
+dynamic = ["version"]
 description = "A desktop application for tracking anime viewing progress"
 authors = [{name = "Aeturnis Development", email = "dev@mirenku.com"}]
 requires-python = ">=3.8"
@@ -36,6 +36,9 @@ build = [
 [build-system]
 requires = ["setuptools>=68.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = {attr = "src.__version__"}
 
 [tool.ruff]
 # Target Python 3.8+

@@ -27,7 +27,7 @@ from utils.persistence import PersistenceManager
 try:
     from __init__ import __version__
 except ImportError:
-    __version__ = "0.3.1"
+    __version__ = "unknown"
 
 logger = logging.getLogger(__name__)
 

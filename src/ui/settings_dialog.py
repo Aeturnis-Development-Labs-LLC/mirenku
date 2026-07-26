@@ -146,8 +146,12 @@ class SettingsDialog:
         )
 
         # Application info
+        try:
+            from __init__ import __version__
+        except ImportError:
+            __version__ = "unknown"
         info_label = ttk.Label(
-            self.general_frame, text="Mirenku v0.3.1", font=("Segoe UI", 10, "bold")
+            self.general_frame, text=f"Mirenku v{__version__}", font=("Segoe UI", 10, "bold")
         )
         info_label.grid(row=2, column=0, columnspan=2, sticky=tk.W)
 
