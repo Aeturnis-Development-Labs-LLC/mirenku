@@ -160,32 +160,22 @@ class FirstRunDialog:
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(20, 0))
 
-        # Skip button (left side) - using tk.Button for better height control
-        self.skip_button = tk.Button(
+        # Skip button (left side)
+        self.skip_button = ttk.Button(
             button_frame,
             text="Skip",
             command=self._on_skip,
             width=14,
-            height=2,  # Explicit height
-            font=("Segoe UI", 10),
-            bg="#f0f0f0",
-            relief=tk.RAISED,
-            bd=1,
         )
         self.skip_button.pack(side=tk.LEFT, padx=(0, 10))
 
-        # Continue button (right side, primary) - using tk.Button for better height control
-        self.continue_button = tk.Button(
+        # Continue button (right side, primary)
+        self.continue_button = ttk.Button(
             button_frame,
             text="Continue",
             command=self._on_continue,
             width=18,
-            height=2,  # Explicit height
-            font=("Segoe UI", 10, "bold"),
-            bg="#0078d4",
-            fg="white",
-            relief=tk.RAISED,
-            bd=1,
+            style="Accent.TButton",
         )
         self.continue_button.pack(side=tk.RIGHT)
         self.continue_button.focus_set()

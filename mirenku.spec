@@ -4,6 +4,8 @@
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files
+
 block_cipher = None
 
 # Get the root directory
@@ -22,7 +24,7 @@ a = Analysis(
         (str(ROOT_DIR / 'LICENSE'), '.'),
         (str(ROOT_DIR / 'README.md'), '.'),
         (str(ROOT_DIR / 'docs' / 'RELEASE_NOTES_v0.3.2.md'), 'docs'),
-    ],
+    ] + collect_data_files('sv_ttk'),
     hiddenimports=[
         'PIL._tkinter_finder',
         'requests',
@@ -31,6 +33,8 @@ a = Analysis(
         'keyring.backends',
         'keyring.backends.Windows',
         'psutil',
+        'sv_ttk',
+        'darkdetect',
     ],
     hookspath=[],
     hooksconfig={},
