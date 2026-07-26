@@ -479,9 +479,8 @@ class SyncService:
                     )
                 else:
                     # Create new anime
-                    from repositories.anime_repository import AnimeRepository
-
                     from models.anime import Anime
+                    from models.anime_repository import AnimeRepository
 
                     repo = AnimeRepository(self.db)
                     anime = Anime(
@@ -497,10 +496,17 @@ class SyncService:
                     anime.studio = mal_data["studio"]
                     anime.image_url = mal_data["image_url"]
                     anime.notes = mal_data["notes"]
-                    anime.sync_status = SyncStatus.SYNCED.value
-                    anime.last_mal_sync = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                    repo.add(anime)
+                    new_id = repo.create(anime)
+                    # to_dict() strips the sync fields, so stamp them directly
+                    cursor.execute(
+                        "UPDATE anime SET sync_status = ?, last_mal_sync = ? WHERE id = ?",
+                        (
+                            SyncStatus.SYNCED.value,
+                            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            new_id,
+                        ),
+                    )
 
                 logger.info(f"Pulled MAL ID {mal_id} from MAL")
                 return True
