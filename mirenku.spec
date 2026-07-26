@@ -15,7 +15,6 @@ a = Analysis(
     binaries=[],
     datas=[
         (str(ROOT_DIR / 'assets'), 'assets'),
-        (str(ROOT_DIR / 'oauth_success.html'), '.'),
         (str(ROOT_DIR / 'LICENSE'), '.'),
         (str(ROOT_DIR / 'README.md'), '.'),
         (str(ROOT_DIR / 'docs' / 'RELEASE_NOTES_v0.3.2.md'), 'docs'),

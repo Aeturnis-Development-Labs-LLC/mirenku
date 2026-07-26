@@ -284,24 +284,6 @@ class Database:
             """
             )
 
-            # Add MAL credentials table (encrypted storage)
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS mal_credentials (
-                    id INTEGER PRIMARY KEY,
-                    username TEXT,
-                    access_token TEXT,  -- Will be encrypted
-                    refresh_token TEXT, -- Will be encrypted
-                    token_expiry TIMESTAMP,
-                    client_id TEXT,
-                    client_secret TEXT, -- Will be encrypted
-                    last_auth TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-
             logger.info("Schema migration to v2 completed")
 
     def execute(self, query: str, params: Optional[Tuple] = None) -> sqlite3.Cursor:

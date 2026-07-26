@@ -1,6 +1,7 @@
 """
 Single Instance Manager for ensuring only one application instance runs
-Handles IPC (Inter-Process Communication) for protocol URLs
+Handles IPC (Inter-Process Communication) so a second instance can
+activate the primary window
 """
 
 import json
@@ -298,23 +299,6 @@ class SingleInstanceManager:
         if self.listener_thread and self.listener_thread.is_alive():
             self.stop_listener.set()
             logger.info("Stopping message listener")
-
-    def handle_protocol_url(self, url: str) -> bool:
-        """
-        Handle a protocol URL (convenience method)
-
-        Args:
-            url: Protocol URL to handle
-
-        Returns:
-            True if handled successfully
-        """
-        if self.is_primary:
-            # Handle directly
-            self._handle_message({"action": "open_url", "url": url, "timestamp": time.time()})
-            return True
-        # Send to primary instance
-        return self.send_message_to_primary({"action": "open_url", "url": url})
 
     def __enter__(self):
         """Context manager entry"""

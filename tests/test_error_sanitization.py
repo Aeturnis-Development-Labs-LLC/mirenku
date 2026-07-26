@@ -24,19 +24,6 @@ class TestErrorSanitization:
         from utils.error_sanitizer import ErrorSanitizer
         return ErrorSanitizer()
 
-    @pytest.fixture
-    def oauth_client(self):
-        """Create OAuth2 client for testing"""
-        with patch('services.mal_oauth2_protocol.TokenStorage'):
-            from services.mal_oauth2_protocol import MALOAuth2ProtocolClient
-            client = MALOAuth2ProtocolClient(
-                client_id="test_client_id_12345",
-                token_storage_path=Path("test_tokens.json")
-            )
-            client.access_token = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test_token"
-            client.refresh_token = "refresh_token_abc123xyz789"
-            return client
-
     def test_sanitize_token_in_error(self, sanitizer):
         """Test that tokens are sanitized in error messages"""
         error_msg = "Failed to authenticate with token: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test_token"
@@ -123,21 +110,6 @@ class TestErrorSanitization:
         assert "secret_token_xyz" not in caplog.text
         assert "[REDACTED]" in caplog.text or "Bearer ***" in caplog.text
 
-    def test_oauth_error_response_sanitization(self, oauth_client):
-        """Test that OAuth error responses are sanitized"""
-        error_response = {
-            "error": "invalid_grant",
-            "error_description": "Refresh token 'refresh_abc123' is invalid",
-            "hint": "Token was revoked"
-        }
-
-        sanitized = oauth_client._sanitize_error_response(error_response)
-
-        # Check the error_description field specifically
-        assert "[REDACTED]" in sanitized['error_description']
-        assert "Token was revoked" in str(sanitized)  # Hint preserved
-        assert "invalid_grant" in str(sanitized)  # Error type preserved
-
     def test_exception_message_sanitization(self, sanitizer):
         """Test that exception messages are sanitized"""
         try:
@@ -204,13 +176,3 @@ class TestErrorSanitization:
         # Should complete quickly (under 100ms for 1000 tokens)
         assert elapsed < 0.1
         assert "secret123" not in sanitized
-
-    def test_mal_specific_sanitization(self, oauth_client):
-        """Test MAL-specific error sanitization"""
-        # Test MAL API error
-        error_msg = "MAL API error: Invalid token 'mal_token_abc123' for user_id 12345"
-        sanitized = oauth_client._sanitize_mal_error(error_msg)
-
-        assert "mal_token_abc123" not in sanitized
-        assert "user_id" in sanitized  # Keep field name
-        assert "12345" in sanitized or "[ID]" in sanitized  # User ID might be kept or redacted

@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 # Mirenku v0.3.2 - Linux Build Script
 # Creates AppImage and DEB/RPM packages
 
@@ -28,7 +28,6 @@ pyinstaller --clean \
     --name "${APP_NAME}" \
     --icon "assets/mirenku.ico" \
     --add-data "assets:assets" \
-    --add-data "oauth_success.html:." \
     --hidden-import "tkinter" \
     --hidden-import "PIL._tkinter_finder" \
     --hidden-import "requests" \
